@@ -9,12 +9,21 @@ const state = {
   statsBase: new Date(),
   editingLog: null,
   selectedChore: null,
+  demoMode: CONFIG.SUPABASE_URL.includes("xxxx") || CONFIG.SUPABASE_ANON_KEY === "eyJ...",
 };
 
 const USERS = CONFIG.USERS;
 document.documentElement.style.setProperty("--a", USERS.a.color);
 document.documentElement.style.setProperty("--b", USERS.b.color);
-const db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+const db = state.demoMode ? null : supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+const DEMO_CHORES = [
+  ["掃除機", "掃除"], ["埃取り", "掃除"], ["散らかり片づける", "掃除"], ["トイレ掃除", "掃除"], ["洗面所掃除", "掃除"],
+  ["洗濯機回す", "洗濯"], ["洗濯干す", "洗濯"], ["洗濯畳む", "洗濯"], ["シーツ洗い", "洗濯"],
+  ["お風呂掃除(湯舟)", "風呂"], ["お風呂掃除(髪の毛取り)", "風呂"], ["お風呂掃除(洗い場)", "風呂"],
+  ["お皿洗い(一人分)", "キッチン"], ["お皿洗い(二人分)", "キッチン"], ["キッチンシンク", "キッチン"], ["コンロ", "キッチン"],
+  ["ゴミ出し(燃えるゴミ)", "ゴミ出し"], ["ゴミ出し(ペットボトル)", "ゴミ出し"], ["ゴミ出し(段ボール)", "ゴミ出し"], ["ゴミ出し(缶)", "ゴミ出し"],
+  ["シャンプー・ソープ補充", "買い物・補充"], ["R1買う", "買い物・補充"], ["水買う", "買い物・補充"], ["水やり", "その他"],
+].map(([name, category], index) => ({ id: `demo-${index + 1}`, name, category, sort_order: index + 1, is_active: true }));
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -48,6 +57,12 @@ function bindEvents() {
 }
 
 async function loadChores() {
+  if (state.demoMode) {
+    state.chores = DEMO_CHORES;
+    renderHome();
+    showToast("Supabase未設定のため、この端末だけのデモモードで表示しています");
+    return;
+  }
   const { data, error } = await db.from("chores").select("*").eq("is_active", true).order("category").order("sort_order");
   if (error) return showToast("家事リストを読み込めませんでした。Supabase設定を確認してください");
   state.chores = data || [];
@@ -55,6 +70,15 @@ async function loadChores() {
 }
 
 async function fetchLogs(start, end) {
+  if (state.demoMode) {
+    return readDemoLogs()
+      .filter((log) => {
+        const doneAt = new Date(log.done_at);
+        return doneAt >= start && doneAt < end;
+      })
+      .sort((a, b) => new Date(a.done_at) - new Date(b.done_at))
+      .map((log) => ({ ...log, chores: state.chores.find((chore) => chore.id === log.chore_id) }));
+  }
   const { data, error } = await db
     .from("logs")
     .select("id,chore_id,done_by,done_at,created_at,chores(name,category)")
@@ -227,6 +251,21 @@ async function saveLog(event) {
   const doneBy = document.querySelector("#doneByButtons .is-selected").dataset.doneBy;
   const doneAt = new Date(document.getElementById("doneAtInput").value);
   const payload = { chore_id: state.selectedChore.id, done_by: doneBy, done_at: doneAt.toISOString() };
+  if (state.demoMode) {
+    const logs = readDemoLogs();
+    if (state.editingLog) {
+      const index = logs.findIndex((log) => log.id === state.editingLog.id);
+      if (index >= 0) logs[index] = { ...logs[index], ...payload };
+    } else {
+      logs.push({ id: crypto.randomUUID(), ...payload, created_at: new Date().toISOString() });
+    }
+    writeDemoLogs(logs);
+    document.getElementById("logDialog").close();
+    showToast("記録しました");
+    closeSheet();
+    refreshCurrentView();
+    return;
+  }
   const query = state.editingLog
     ? db.from("logs").update(payload).eq("id", state.editingLog.id)
     : db.from("logs").insert(payload);
@@ -263,6 +302,13 @@ function editLog(id) {
 
 async function deleteLog(id) {
   if (!confirm("この記録を削除しますか？")) return;
+  if (state.demoMode) {
+    writeDemoLogs(readDemoLogs().filter((log) => log.id !== id));
+    showToast("削除しました");
+    closeSheet();
+    renderGrass();
+    return;
+  }
   const { error } = await db.from("logs").delete().eq("id", id);
   if (error) return showToast("削除できませんでした。もう一度お試しください");
   showToast("削除しました");
@@ -368,4 +414,14 @@ function timeText(value) {
 }
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (s) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+}
+function readDemoLogs() {
+  try {
+    return JSON.parse(localStorage.getItem("kaji-log-demo-logs") || "[]");
+  } catch {
+    return [];
+  }
+}
+function writeDemoLogs(logs) {
+  localStorage.setItem("kaji-log-demo-logs", JSON.stringify(logs));
 }

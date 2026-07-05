@@ -15,9 +15,12 @@
 
 <header class="app-header">
   <h1 class="app-title">KAJI LOG<span id="demoBadge" class="demo-badge hidden">DEMO</span></h1>
-  <div class="user-toggle" id="userToggle">
-    <button type="button" class="user-toggle-btn" data-user="a">A</button>
-    <button type="button" class="user-toggle-btn" data-user="b">B</button>
+  <div class="header-actions">
+    <button type="button" id="settingsBtn" class="icon-btn-header" aria-label="設定">⚙️</button>
+    <div class="user-toggle" id="userToggle">
+      <button type="button" class="user-toggle-btn" data-user="a">A</button>
+      <button type="button" class="user-toggle-btn" data-user="b">B</button>
+    </div>
   </div>
 </header>
 
@@ -25,11 +28,10 @@
 
   <!-- 記録タブ -->
   <section id="view-record" class="view">
-    <div class="quick-buttons" id="quickButtons"></div>
     <div class="chore-list" id="choreList"></div>
   </section>
 
-  <!-- 草タブ -->
+  <!-- カレンダータブ -->
   <section id="view-grass" class="view hidden">
     <div class="period-nav">
       <button type="button" class="nav-btn" id="grassPrevBtn" aria-label="前月">‹</button>
@@ -85,7 +87,7 @@
     <span class="tab-icon">📝</span><span>記録</span>
   </button>
   <button type="button" class="tab-btn" data-view="grass">
-    <span class="tab-icon">🌱</span><span>草</span>
+    <span class="tab-icon">📅</span><span>カレンダー</span>
   </button>
   <button type="button" class="tab-btn" data-view="week">
     <span class="tab-icon">🗓️</span><span>週</span>
@@ -99,6 +101,7 @@
 <div id="recordModal" class="modal-overlay hidden">
   <div class="modal" role="dialog" aria-modal="true">
     <h2 id="recordModalTitle" class="modal-title"></h2>
+    <div id="recordModalDuration" class="modal-subtext hidden"></div>
     <div class="field-label">実施者</div>
     <div class="segmented" id="doneBySegment">
       <button type="button" class="segment-btn" data-value="a">A</button>
@@ -122,6 +125,59 @@
     <h2 id="listSheetTitle" class="sheet-title"></h2>
     <div id="listSheetBody" class="sheet-body"></div>
     <button type="button" id="closeListSheetBtn" class="btn-ghost">閉じる</button>
+  </div>
+</div>
+
+<!-- 設定シート(表示名・家事マスタ管理) -->
+<div id="settingsSheet" class="sheet-overlay hidden">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">設定</h2>
+    <div class="sheet-body">
+      <div class="settings-section">
+        <div class="settings-section-title">表示名</div>
+        <div class="settings-name-row">
+          <span class="settings-name-dot" style="background:var(--color-a)"></span>
+          <input type="text" id="userNameAInput" class="text-input" maxlength="10">
+        </div>
+        <div class="settings-name-row">
+          <span class="settings-name-dot" style="background:var(--color-b)"></span>
+          <input type="text" id="userNameBInput" class="text-input" maxlength="10">
+        </div>
+        <button type="button" id="saveNamesBtn" class="btn-primary btn-full">名前を保存</button>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title-row">
+          <div class="settings-section-title">家事一覧</div>
+          <button type="button" id="addChoreBtn" class="btn-ghost btn-small">＋ 追加</button>
+        </div>
+        <div id="choreManageList" class="chore-manage-list"></div>
+      </div>
+    </div>
+    <button type="button" id="closeSettingsBtn" class="btn-ghost">閉じる</button>
+  </div>
+</div>
+
+<!-- 家事の追加・編集モーダル -->
+<div id="choreModal" class="modal-overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 id="choreModalTitle" class="modal-title">家事を追加</h2>
+    <div class="field-label">家事名</div>
+    <input type="text" id="choreNameInput" class="text-input" maxlength="40">
+    <div class="field-label">カテゴリ</div>
+    <input type="text" id="choreCategoryInput" class="text-input" list="categoryOptions" maxlength="20">
+    <datalist id="categoryOptions"></datalist>
+    <div class="field-label">目安時間</div>
+    <div class="segmented segmented-wrap" id="choreDurationSegment">
+      <button type="button" class="segment-btn" data-value="under5">〜5分</button>
+      <button type="button" class="segment-btn" data-value="5to10">5〜10分</button>
+      <button type="button" class="segment-btn" data-value="10to15">10〜15分</button>
+      <button type="button" class="segment-btn" data-value="15to20">15〜20分</button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" id="cancelChoreBtn" class="btn-ghost">キャンセル</button>
+      <button type="button" id="saveChoreBtn" class="btn-primary">保存</button>
+    </div>
   </div>
 </div>
 

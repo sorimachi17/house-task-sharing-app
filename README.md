@@ -22,6 +22,7 @@ create table chores (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   category text not null,
+  duration_bucket text not null default 'under5' check (duration_bucket in ('under5', '5to10', '10to15', '15to20')),
   sort_order int not null default 0,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
@@ -38,13 +39,22 @@ create table logs (
 
 create index idx_logs_done_at on logs (done_at);
 
+-- 表示名(アプリ内の設定画面から変更できる。色は config.js 側で管理)
+create table app_users (
+  id text primary key check (id in ('a', 'b')),
+  name text not null,
+  color text not null
+);
+
 -- RLS: 匿名キーでフルアクセス(2人用プライベートアプリのため)
 alter table chores enable row level security;
 alter table logs enable row level security;
+alter table app_users enable row level security;
 create policy "anon all chores" on chores for all to anon using (true) with check (true);
 create policy "anon all logs" on logs for all to anon using (true) with check (true);
+create policy "anon all app_users" on app_users for all to anon using (true) with check (true);
 
--- シードデータ(家事マスタ初期値)
+-- シードデータ(家事マスタ初期値。目安時間は一旦「5分未満」で登録し、あとでアプリの設定画面から調整する)
 insert into chores (name, category, sort_order) values
   ('掃除機', '掃除', 1),
   ('埃取り', '掃除', 2),
@@ -72,6 +82,20 @@ insert into chores (name, category, sort_order) values
   ('水やり', 'その他', 1);
 ```
 
+すでに以前のバージョンでSupabaseプロジェクトを作成済みの場合は、上記を新規実行する代わりに次の差分だけを実行すればよい。
+
+```sql
+alter table chores add column duration_bucket text not null default 'under5' check (duration_bucket in ('under5', '5to10', '10to15', '15to20'));
+
+create table app_users (
+  id text primary key check (id in ('a', 'b')),
+  name text not null,
+  color text not null
+);
+alter table app_users enable row level security;
+create policy "anon all app_users" on app_users for all to anon using (true) with check (true);
+```
+
 ### 3. API キーを `config.js` に設定
 
 Supabase の `Project Settings → API` から `URL` と `anon public` キーを取得し、`config.js` を書き換える。
@@ -87,7 +111,7 @@ const CONFIG = {
 };
 ```
 
-`USERS` の `name` は実際の名前に、`color` は好みの色に変更してよい(色覚多様性の観点から、A/Bで明度・色相差がはっきり異なる組み合わせを推奨)。
+`USERS` の `color` は好みの色に変更してよい(色覚多様性の観点から、A/Bで明度・色相差がはっきり異なる組み合わせを推奨)。`name` はここでの値が初期表示名になるが、アプリ内のヘッダーの⚙️(設定)から後でいつでも変更できる。
 
 ### 4. GitHub Pages で公開
 
@@ -103,16 +127,18 @@ const CONFIG = {
 
 ## 画面構成
 
-- **記録タブ**: カテゴリ別の家事一覧をタップして記録。直近30日でよく使う家事TOP3をクイックボタンとして表示
-- **草タブ**: 月表示のカレンダー。各日を上下2分割してA/Bそれぞれの実施回数を濃淡で表示(GitHub風)
-- **週タブ**: 5:00〜25:00の時間割ビュー。いつ・誰が家事をしたかを時刻位置にチップ表示
+- **記録タブ**: カテゴリ別の家事一覧をタップして記録
+- **カレンダータブ**: 月表示。各日を上下2分割してA/Bそれぞれの実施回数を濃淡+件数で表示
+- **週タブ**: 7:00〜24:00の時間割ビュー。いつ・誰が家事をしたかを時刻位置にチップ表示
 - **集計タブ**: 今週/今月のA・B比較と、家事別の実施件数テーブル
+- **設定(ヘッダーの⚙️)**: 表示名の変更、家事マスタの追加・編集・表示切り替え
 
-`both`(二人でやった)の記録は、集計・草グラフともにA・B両方に1件ずつカウントされる。
+`both`(二人でやった)の記録は、集計・カレンダーともにA・B両方に1件ずつカウントされる。
+
+家事ごとに目安時間(5分未満/5〜10分/10〜15分/15〜20分)を設定でき、同じ家事を選んだ記録は常に同じ目安時間として扱われる(記録のたびに個別入力する必要はない)。
 
 ## スコープ外
 
 - ポイント・評価・リマインダー機能
-- 家事マスタの画面上での追加編集(Supabase の Table Editor で直接管理)
 - 通知、リアルタイム同期、オフライン対応
 - 認証

@@ -5,12 +5,21 @@
   var sb = DEMO_MODE ? null : window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
   var CATEGORY_ORDER = ['掃除', '洗濯', '風呂', 'キッチン', 'ゴミ出し', '買い物・補充', 'その他'];
-  var WEEK_START_HOUR = 5;
-  var WEEK_END_HOUR = 25;
+  var WEEK_START_HOUR = 7;
+  var WEEK_END_HOUR = 24;
   var WEEK_TOTAL_HOURS = WEEK_END_HOUR - WEEK_START_HOUR;
   var HOUR_PX = 40;
   var LEVEL_ALPHA = [0.06, 0.35, 0.65, 1];
   var DEMO_LOGS_KEY = 'kajilog_demo_logs';
+  var DEMO_CHORES_KEY = 'kajilog_demo_chores';
+  var DEMO_USER_NAMES_KEY = 'kajilog_demo_user_names';
+
+  var DURATION_LABELS = {
+    under5: '5分未満',
+    '5to10': '5〜10分',
+    '10to15': '10〜15分',
+    '15to20': '15〜20分'
+  };
 
   var DEMO_CHORE_SEED = [
     ['掃除機', '掃除'], ['埃取り', '掃除'], ['散らかり片づける', '掃除'], ['トイレ掃除', '掃除'], ['洗面所掃除', '掃除'],
@@ -20,13 +29,12 @@
     ['ゴミ出し(燃えるゴミ)', 'ゴミ出し'], ['ゴミ出し(ペットボトル)', 'ゴミ出し'], ['ゴミ出し(段ボール)', 'ゴミ出し'], ['ゴミ出し(缶)', 'ゴミ出し'],
     ['シャンプー・ソープ補充', '買い物・補充'], ['R1買う', '買い物・補充'], ['水買う', '買い物・補充'], ['水やり', 'その他']
   ];
-  var DEMO_CHORES = DEMO_CHORE_SEED.map(function (item, index) {
-    return { id: 'demo-' + (index + 1), name: item[0], category: item[1], sort_order: index + 1, is_active: true };
-  });
 
   var state = {
     currentUser: localStorage.getItem('kajilog_currentUser') || 'a',
     currentView: 'record',
+    userNames: { a: CONFIG.USERS.a.name, b: CONFIG.USERS.b.name },
+    allChores: [],
     chores: [],
     choresById: {},
     grassMonth: startOfMonth(new Date()),
@@ -35,6 +43,7 @@
     summaryAnchor: new Date(),
     editingLogId: null,
     modalChoreId: null,
+    editingChoreId: null,
   };
 
   // ---------- 日付ユーティリティ(すべて端末ローカル時刻で計算する) ----------
@@ -50,12 +59,6 @@
   function addDays(d, n) {
     var r = new Date(d);
     r.setDate(r.getDate() + n);
-    return r;
-  }
-
-  function addHours(d, h) {
-    var r = new Date(d);
-    r.setHours(r.getHours() + h);
     return r;
   }
 
@@ -93,18 +96,12 @@
     return (weekStart.getMonth() + 1) + '/' + weekStart.getDate() + ' – ' + (end.getMonth() + 1) + '/' + end.getDate();
   }
 
-  // 5:00〜25:00の時間割上での表示日・表示位置(時)を求める。
-  // 1:00〜4:59の記録は前日の25:00側に丸めて表示する。
+  // 7:00〜24:00の時間割上での表示位置(時)を求める。範囲外は呼び出し側で除外する。
   function getDisplaySlot(doneAtDate) {
-    var hourFloat = doneAtDate.getHours() + doneAtDate.getMinutes() / 60;
-    var displayDate = startOfDay(doneAtDate);
-    var displayHour = hourFloat;
-    if (hourFloat < WEEK_START_HOUR) {
-      displayDate = addDays(displayDate, -1);
-      displayHour = hourFloat + 24;
-      if (displayHour > WEEK_END_HOUR) displayHour = WEEK_END_HOUR;
-    }
-    return { displayDate: displayDate, displayHour: displayHour };
+    return {
+      displayDate: startOfDay(doneAtDate),
+      displayHour: doneAtDate.getHours() + doneAtDate.getMinutes() / 60
+    };
   }
 
   // ---------- その他ユーティリティ ----------
@@ -134,10 +131,11 @@
     return 3;
   }
 
+  // 「二人で」は縦の二色塗り分けで表現する(A/Bどちらの色でもないキャンディー縞は使わない)。
   function dotColorForUser(u) {
     if (u === 'a') return CONFIG.USERS.a.color;
     if (u === 'b') return CONFIG.USERS.b.color;
-    return 'linear-gradient(135deg,' + CONFIG.USERS.a.color + ',' + CONFIG.USERS.b.color + ')';
+    return 'linear-gradient(90deg,' + CONFIG.USERS.a.color + ' 50%,' + CONFIG.USERS.b.color + ' 50%)';
   }
 
   var toastTimer = null;
@@ -165,8 +163,7 @@
 
   document.addEventListener('DOMContentLoaded', init);
 
-  function init() {
-    applyUserTheme();
+  async function init() {
     bindHeaderEvents();
     bindTabBar();
     bindModalEvents();
@@ -174,23 +171,29 @@
     bindGrassNav();
     bindWeekNav();
     bindSummaryNav();
-    loadChores().then(renderCurrentView);
+    bindSettingsEvents();
+    bindChoreModalEvents();
+
+    state.userNames = await loadUserNames();
+    applyUserTheme();
+    await loadChores();
+    renderCurrentView();
   }
 
   function applyUserTheme() {
     document.documentElement.style.setProperty('--color-a', CONFIG.USERS.a.color);
     document.documentElement.style.setProperty('--color-b', CONFIG.USERS.b.color);
 
-    document.querySelector('.user-toggle-btn[data-user="a"]').textContent = CONFIG.USERS.a.name;
-    document.querySelector('.user-toggle-btn[data-user="b"]').textContent = CONFIG.USERS.b.name;
+    document.querySelector('.user-toggle-btn[data-user="a"]').textContent = state.userNames.a;
+    document.querySelector('.user-toggle-btn[data-user="b"]').textContent = state.userNames.b;
     updateUserToggleUI();
 
-    document.querySelector('#doneBySegment .segment-btn[data-value="a"]').textContent = CONFIG.USERS.a.name;
-    document.querySelector('#doneBySegment .segment-btn[data-value="b"]').textContent = CONFIG.USERS.b.name;
+    document.querySelector('#doneBySegment .segment-btn[data-value="a"]').textContent = state.userNames.a;
+    document.querySelector('#doneBySegment .segment-btn[data-value="b"]').textContent = state.userNames.b;
 
     document.querySelector('.grass-legend').innerHTML =
-      '<span class="legend-swatch" style="background:' + CONFIG.USERS.a.color + '"></span>' + escapeHtml(CONFIG.USERS.a.name) + '=上半分&emsp;' +
-      '<span class="legend-swatch" style="background:' + CONFIG.USERS.b.color + '"></span>' + escapeHtml(CONFIG.USERS.b.name) + '=下半分';
+      '<span class="legend-swatch" style="background:' + CONFIG.USERS.a.color + '"></span>' + escapeHtml(state.userNames.a) + '=上半分&emsp;' +
+      '<span class="legend-swatch" style="background:' + CONFIG.USERS.b.color + '"></span>' + escapeHtml(state.userNames.b) + '=下半分';
   }
 
   function updateUserToggleUI() {
@@ -233,25 +236,31 @@
     else if (state.currentView === 'summary') renderSummaryView();
   }
 
+  function finalizeChores() {
+    state.allChores.sort(function (a, b) { return a.sort_order - b.sort_order; });
+    state.choresById = {};
+    state.allChores.forEach(function (c) { state.choresById[c.id] = c; });
+    state.chores = state.allChores.filter(function (c) { return c.is_active; });
+  }
+
   async function loadChores() {
     if (DEMO_MODE) {
-      state.chores = DEMO_CHORES.slice().sort(function (a, b) { return a.sort_order - b.sort_order; });
-      state.choresById = {};
-      state.chores.forEach(function (c) { state.choresById[c.id] = c; });
+      state.allChores = readDemoChores();
+      finalizeChores();
       seedDemoLogsIfEmpty();
       document.getElementById('demoBadge').classList.remove('hidden');
       showToast('Supabase未設定のため、この端末だけのデモモードで表示しています');
       return;
     }
-    var res = await sb.from('chores').select('*').eq('is_active', true);
+    var res = await sb.from('chores').select('*');
     if (res.error) {
       showToast('家事一覧の取得に失敗しました。電波状況を確認してもう一度お試しください。', true);
-      state.chores = [];
+      state.allChores = [];
+      finalizeChores();
       return;
     }
-    state.chores = res.data.slice().sort(function (a, b) { return a.sort_order - b.sort_order; });
-    state.choresById = {};
-    state.chores.forEach(function (c) { state.choresById[c.id] = c; });
+    state.allChores = res.data;
+    finalizeChores();
   }
 
   // ---------- デモモード(Supabase未設定時、この端末のlocalStorageのみで完結する) ----------
@@ -268,8 +277,37 @@
     localStorage.setItem(DEMO_LOGS_KEY, JSON.stringify(logs));
   }
 
+  function readDemoChores() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(DEMO_CHORES_KEY) || 'null');
+      if (saved && saved.length) return saved;
+    } catch (e) { /* ignore, fall through to seed */ }
+    var seeded = DEMO_CHORE_SEED.map(function (item, index) {
+      return { id: 'demo-' + (index + 1), name: item[0], category: item[1], duration_bucket: 'under5', sort_order: index + 1, is_active: true };
+    });
+    writeDemoChores(seeded);
+    return seeded;
+  }
+
+  function writeDemoChores(chores) {
+    localStorage.setItem(DEMO_CHORES_KEY, JSON.stringify(chores));
+  }
+
+  function readDemoUserNames() {
+    try {
+      return JSON.parse(localStorage.getItem(DEMO_USER_NAMES_KEY) || 'null') || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeDemoUserNames(names) {
+    localStorage.setItem(DEMO_USER_NAMES_KEY, JSON.stringify(names));
+  }
+
   function seedDemoLogsIfEmpty() {
     if (readDemoLogs().length) return;
+    var chores = state.allChores.length ? state.allChores : readDemoChores();
     var doneByOptions = ['a', 'a', 'b', 'b', 'both'];
     var logs = [];
     var uid = 1;
@@ -277,7 +315,7 @@
       var day = addDays(startOfDay(new Date()), -dayOffset);
       var entriesToday = Math.floor(Math.random() * 4);
       for (var i = 0; i < entriesToday; i++) {
-        var chore = DEMO_CHORES[Math.floor(Math.random() * DEMO_CHORES.length)];
+        var chore = chores[Math.floor(Math.random() * chores.length)];
         var hour = Math.random() < 0.06 ? Math.floor(Math.random() * 4) : Math.floor(Math.random() * 19) + 6;
         var minute = Math.floor(Math.random() * 60);
         var doneAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute);
@@ -293,7 +331,7 @@
     writeDemoLogs(logs);
   }
 
-  // 以降、記録の取得・保存・削除はこの4関数を経由する。
+  // 以降、記録・家事マスタ・表示名の取得/保存/削除はこれらの関数を経由する。
   // デモモードではlocalStorage、通常モードではSupabaseにアクセスする。
 
   async function fetchLogsRange(startDate, endDate) {
@@ -307,14 +345,6 @@
     return await sb.from('logs').select('*')
       .gte('done_at', startDate.toISOString())
       .lt('done_at', endDate.toISOString());
-  }
-
-  async function fetchChoreIdsSince(sinceDate) {
-    if (DEMO_MODE) {
-      var logs = readDemoLogs().filter(function (log) { return new Date(log.done_at) >= sinceDate; });
-      return { data: logs.map(function (l) { return { chore_id: l.chore_id }; }), error: null };
-    }
-    return await sb.from('logs').select('chore_id').gte('done_at', sinceDate.toISOString());
   }
 
   async function insertLogRecord(payload) {
@@ -352,15 +382,86 @@
     return await sb.from('logs').delete().eq('id', id);
   }
 
+  async function loadUserNames() {
+    if (DEMO_MODE) {
+      var saved = readDemoUserNames();
+      return { a: saved.a || CONFIG.USERS.a.name, b: saved.b || CONFIG.USERS.b.name };
+    }
+    var res = await sb.from('app_users').select('*');
+    var names = { a: CONFIG.USERS.a.name, b: CONFIG.USERS.b.name };
+    if (res.error || !res.data) return names;
+    res.data.forEach(function (row) {
+      if (row.id === 'a' || row.id === 'b') names[row.id] = row.name;
+    });
+    return names;
+  }
+
+  async function saveUserNames(names) {
+    if (DEMO_MODE) {
+      writeDemoUserNames(names);
+      return { error: null };
+    }
+    return await sb.from('app_users').upsert([
+      { id: 'a', name: names.a, color: CONFIG.USERS.a.color },
+      { id: 'b', name: names.b, color: CONFIG.USERS.b.color }
+    ]);
+  }
+
+  async function upsertChore(chore) {
+    if (DEMO_MODE) {
+      var list = readDemoChores();
+      if (chore.id) {
+        var idx = list.findIndex(function (c) { return c.id === chore.id; });
+        if (idx >= 0) list[idx] = Object.assign({}, list[idx], chore);
+      } else {
+        var maxOrder = list.reduce(function (m, c) { return Math.max(m, c.sort_order || 0); }, 0);
+        list.push({
+          id: 'demo-chore-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+          name: chore.name,
+          category: chore.category,
+          duration_bucket: chore.duration_bucket,
+          sort_order: maxOrder + 1,
+          is_active: true
+        });
+      }
+      writeDemoChores(list);
+      return { error: null };
+    }
+    if (chore.id) {
+      return await sb.from('chores').update({
+        name: chore.name,
+        category: chore.category,
+        duration_bucket: chore.duration_bucket
+      }).eq('id', chore.id);
+    }
+    var maxOrder2 = state.allChores.reduce(function (m, c) { return Math.max(m, c.sort_order || 0); }, 0);
+    return await sb.from('chores').insert({
+      name: chore.name,
+      category: chore.category,
+      duration_bucket: chore.duration_bucket,
+      sort_order: maxOrder2 + 1,
+      is_active: true
+    });
+  }
+
+  async function toggleChoreActive(id, isActive) {
+    if (DEMO_MODE) {
+      var list = readDemoChores();
+      var idx = list.findIndex(function (c) { return c.id === id; });
+      if (idx >= 0) { list[idx].is_active = isActive; writeDemoChores(list); }
+      return { error: null };
+    }
+    return await sb.from('chores').update({ is_active: isActive }).eq('id', id);
+  }
+
   // ---------- 記録タブ ----------
 
-  async function renderRecordView() {
+  function renderRecordView() {
     var listEl = document.getElementById('choreList');
-    var quickEl = document.getElementById('quickButtons');
-
     listEl.innerHTML = '';
     if (!state.chores.length) {
-      listEl.innerHTML = '<div class="empty-state">家事一覧を読み込めませんでした</div>';
+      listEl.innerHTML = '<div class="empty-state">表示できる家事がありません。設定から家事を追加してください</div>';
+      return;
     }
     groupChoresByCategory(state.chores).forEach(function (g) {
       var catDiv = document.createElement('div');
@@ -379,26 +480,6 @@
       });
       listEl.appendChild(catDiv);
     });
-
-    quickEl.innerHTML = '';
-    var since = addDays(startOfDay(new Date()), -29);
-    var res = await fetchChoreIdsSince(since);
-    if (res.error) return;
-    var counts = {};
-    res.data.forEach(function (row) { counts[row.chore_id] = (counts[row.chore_id] || 0) + 1; });
-    var top3 = Object.keys(counts)
-      .filter(function (id) { return state.choresById[id]; })
-      .sort(function (a, b) { return counts[b] - counts[a]; })
-      .slice(0, 3);
-    top3.forEach(function (id) {
-      var chore = state.choresById[id];
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'quick-btn';
-      btn.textContent = chore.name;
-      btn.addEventListener('click', function () { openRecordModal({ choreId: id }); });
-      quickEl.appendChild(btn);
-    });
   }
 
   // ---------- 記録モーダル ----------
@@ -409,6 +490,14 @@
     state.editingLogId = log ? log.id : null;
     var chore = state.choresById[state.modalChoreId];
     document.getElementById('recordModalTitle').textContent = chore ? chore.name : '(削除済みの家事)';
+
+    var durationEl = document.getElementById('recordModalDuration');
+    if (chore && DURATION_LABELS[chore.duration_bucket]) {
+      durationEl.textContent = '目安時間: ' + DURATION_LABELS[chore.duration_bucket];
+      durationEl.classList.remove('hidden');
+    } else {
+      durationEl.classList.add('hidden');
+    }
 
     setSegmentValue('doneBySegment', log ? log.done_by : state.currentUser);
     styleDoneBySegment();
@@ -441,7 +530,7 @@
     document.querySelectorAll('#doneBySegment .segment-btn').forEach(function (btn) {
       if (btn.classList.contains('active')) {
         btn.style.background = dotColorForUser(btn.dataset.value);
-        btn.style.borderColor = btn.dataset.value === 'both' ? 'transparent' : dotColorForUser(btn.dataset.value);
+        btn.style.borderColor = 'transparent';
         btn.style.color = '#fff';
       } else {
         btn.style.background = '';
@@ -518,7 +607,7 @@
     }
   }
 
-  // ---------- 一覧ボトムシート(草タブ・週タブ共通) ----------
+  // ---------- 一覧ボトムシート(カレンダータブ・週タブ共通) ----------
 
   function openListSheet(title, logs) {
     document.getElementById('listSheetTitle').textContent = title;
@@ -576,7 +665,7 @@
     });
   }
 
-  // ---------- 草タブ ----------
+  // ---------- カレンダータブ ----------
 
   function bindGrassNav() {
     document.getElementById('grassPrevBtn').addEventListener('click', function () {
@@ -587,6 +676,10 @@
       state.grassMonth = addMonths(state.grassMonth, 1);
       renderGrassView();
     });
+  }
+
+  function countTextColor(level) {
+    return level >= 2 ? '#fff' : 'rgba(28,31,32,0.72)';
   }
 
   async function renderGrassView() {
@@ -631,12 +724,30 @@
       var cell = document.createElement('div');
       cell.className = 'grass-cell';
 
+      var levelA = countLevel(info.a);
+      var levelB = countLevel(info.b);
+
       var topHalf = document.createElement('div');
       topHalf.className = 'grass-cell-half';
-      topHalf.style.background = rgba(CONFIG.USERS.a.color, LEVEL_ALPHA[countLevel(info.a)]);
+      topHalf.style.background = rgba(CONFIG.USERS.a.color, LEVEL_ALPHA[levelA]);
+      if (info.a > 0) {
+        var countA = document.createElement('span');
+        countA.className = 'grass-cell-count';
+        countA.style.color = countTextColor(levelA);
+        countA.textContent = String(info.a);
+        topHalf.appendChild(countA);
+      }
+
       var bottomHalf = document.createElement('div');
       bottomHalf.className = 'grass-cell-half';
-      bottomHalf.style.background = rgba(CONFIG.USERS.b.color, LEVEL_ALPHA[countLevel(info.b)]);
+      bottomHalf.style.background = rgba(CONFIG.USERS.b.color, LEVEL_ALPHA[levelB]);
+      if (info.b > 0) {
+        var countB = document.createElement('span');
+        countB.className = 'grass-cell-count';
+        countB.style.color = countTextColor(levelB);
+        countB.textContent = String(info.b);
+        bottomHalf.appendChild(countB);
+      }
 
       var dateLabel = document.createElement('span');
       dateLabel.className = 'grass-cell-date';
@@ -657,8 +768,8 @@
       else if (log.done_by === 'b') sumB++;
       else { sumA++; sumB++; sumBoth++; }
     });
-    summaryEl.innerHTML = '今月: ' + escapeHtml(CONFIG.USERS.a.name) + ' ' + sumA + '件 / ' +
-      escapeHtml(CONFIG.USERS.b.name) + ' ' + sumB + '件<br>うち二人で ' + sumBoth + '件';
+    summaryEl.innerHTML = '今月: ' + escapeHtml(state.userNames.a) + ' ' + sumA + '件 / ' +
+      escapeHtml(state.userNames.b) + ' ' + sumB + '件<br>うち二人で ' + sumBoth + '件';
   }
 
   // ---------- 週タブ ----------
@@ -681,9 +792,7 @@
   async function renderWeekView() {
     document.getElementById('weekLabel').textContent = formatWeekLabel(state.weekStart);
 
-    var fetchStart = state.weekStart;
-    var fetchEnd = addHours(addDays(state.weekStart, 7), WEEK_START_HOUR);
-    var res = await fetchLogsRange(fetchStart, fetchEnd);
+    var res = await fetchLogsRange(state.weekStart, addDays(state.weekStart, 7));
 
     var timetable = document.getElementById('weekTimetable');
     if (res.error) {
@@ -701,6 +810,7 @@
 
     res.data.forEach(function (log) {
       var slot = getDisplaySlot(new Date(log.done_at));
+      if (slot.displayHour < WEEK_START_HOUR || slot.displayHour >= WEEK_END_HOUR) return;
       var key = dateKey(slot.displayDate);
       if (dayBuckets[key]) dayBuckets[key].push({ log: log, displayHour: slot.displayHour });
     });
@@ -754,7 +864,8 @@
 
         shown.forEach(function (item, idx) {
           var chip = document.createElement('div');
-          chip.className = 'week-chip user-' + item.log.done_by;
+          chip.className = 'week-chip';
+          chip.style.background = dotColorForUser(item.log.done_by);
           chip.style.top = top + 'px';
           chip.style.height = '18px';
           chip.style.left = (idx * widthPct) + '%';
@@ -768,7 +879,7 @@
         });
         if (overflow > 0) {
           var more = document.createElement('div');
-          more.className = 'week-chip user-both';
+          more.className = 'week-chip week-chip-more';
           more.style.top = top + 'px';
           more.style.height = '18px';
           more.style.left = (shown.length * widthPct) + '%';
@@ -865,8 +976,8 @@
 
     var maxCount = Math.max(countA, countB, 1);
     barsEl.innerHTML =
-      barRowHtml(CONFIG.USERS.a.name, countA, maxCount, CONFIG.USERS.a.color) +
-      barRowHtml(CONFIG.USERS.b.name, countB, maxCount, CONFIG.USERS.b.color) +
+      barRowHtml(state.userNames.a, countA, maxCount, CONFIG.USERS.a.color) +
+      barRowHtml(state.userNames.b, countB, maxCount, CONFIG.USERS.b.color) +
       '<div class="summary-both-note">うち二人で: ' + countBoth + '件</div>';
 
     var rows = Object.keys(perChore).map(function (id) {
@@ -893,6 +1004,159 @@
       '<div class="summary-bar-track"><div class="summary-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
       '<div class="summary-bar-count">' + count + '</div>' +
       '</div>';
+  }
+
+  // ---------- 設定シート(表示名・家事マスタ管理) ----------
+
+  function bindSettingsEvents() {
+    document.getElementById('settingsBtn').addEventListener('click', openSettingsSheet);
+    document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsSheet);
+    document.getElementById('settingsSheet').addEventListener('click', function (e) {
+      if (e.target.id === 'settingsSheet') closeSettingsSheet();
+    });
+    document.getElementById('saveNamesBtn').addEventListener('click', saveNamesFromSettings);
+    document.getElementById('addChoreBtn').addEventListener('click', function () { openChoreModal(null); });
+  }
+
+  function openSettingsSheet() {
+    document.getElementById('userNameAInput').value = state.userNames.a;
+    document.getElementById('userNameBInput').value = state.userNames.b;
+    renderChoreManageList();
+    document.getElementById('settingsSheet').classList.remove('hidden');
+  }
+
+  function closeSettingsSheet() {
+    document.getElementById('settingsSheet').classList.add('hidden');
+  }
+
+  async function saveNamesFromSettings() {
+    var nameA = document.getElementById('userNameAInput').value.trim();
+    var nameB = document.getElementById('userNameBInput').value.trim();
+    if (!nameA || !nameB) {
+      showToast('名前を入力してください。', true);
+      return;
+    }
+    var res = await saveUserNames({ a: nameA, b: nameB });
+    if (res.error) {
+      showToast('保存できませんでした。電波状況を確認してもう一度お試しください。', true);
+      return;
+    }
+    state.userNames = { a: nameA, b: nameB };
+    applyUserTheme();
+    showToast('名前を保存しました');
+  }
+
+  function renderChoreManageList() {
+    var listEl = document.getElementById('choreManageList');
+    listEl.innerHTML = '';
+    var sorted = state.allChores.slice().sort(function (a, b) { return a.sort_order - b.sort_order; });
+    if (!sorted.length) {
+      listEl.innerHTML = '<div class="empty-state">家事がまだありません</div>';
+      return;
+    }
+    sorted.forEach(function (chore) {
+      var row = document.createElement('div');
+      row.className = 'chore-manage-row' + (chore.is_active ? '' : ' is-inactive');
+
+      var toggleLabel = document.createElement('label');
+      toggleLabel.className = 'chore-active-toggle';
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = chore.is_active;
+      checkbox.addEventListener('change', function () { handleToggleChoreActive(chore.id, checkbox.checked); });
+      toggleLabel.appendChild(checkbox);
+
+      var main = document.createElement('div');
+      main.className = 'chore-manage-main';
+      main.innerHTML = '<div class="chore-manage-name">' + escapeHtml(chore.name) + '</div>' +
+        '<div class="chore-manage-meta">' + escapeHtml(chore.category) + ' ・ ' + escapeHtml(DURATION_LABELS[chore.duration_bucket] || '') + '</div>';
+
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'icon-btn';
+      editBtn.textContent = '✎';
+      editBtn.addEventListener('click', function () { openChoreModal(chore); });
+
+      row.appendChild(toggleLabel);
+      row.appendChild(main);
+      row.appendChild(editBtn);
+      listEl.appendChild(row);
+    });
+  }
+
+  async function handleToggleChoreActive(id, isActive) {
+    var res = await toggleChoreActive(id, isActive);
+    if (res.error) {
+      showToast('更新できませんでした。電波状況を確認してもう一度お試しください。', true);
+      renderChoreManageList();
+      return;
+    }
+    var chore = state.choresById[id];
+    if (chore) chore.is_active = isActive;
+    state.chores = state.allChores.filter(function (c) { return c.is_active; });
+    renderChoreManageList();
+    if (state.currentView === 'record') renderRecordView();
+  }
+
+  // ---------- 家事の追加・編集モーダル ----------
+
+  function bindChoreModalEvents() {
+    document.getElementById('choreDurationSegment').addEventListener('click', function (e) {
+      var btn = e.target.closest('.segment-btn');
+      if (!btn) return;
+      setSegmentValue('choreDurationSegment', btn.dataset.value);
+    });
+    document.getElementById('cancelChoreBtn').addEventListener('click', closeChoreModal);
+    document.getElementById('saveChoreBtn').addEventListener('click', saveChoreFromModal);
+    document.getElementById('choreModal').addEventListener('click', function (e) {
+      if (e.target.id === 'choreModal') closeChoreModal();
+    });
+  }
+
+  function openChoreModal(chore) {
+    state.editingChoreId = chore ? chore.id : null;
+    document.getElementById('choreModalTitle').textContent = chore ? '家事を編集' : '家事を追加';
+    document.getElementById('choreNameInput').value = chore ? chore.name : '';
+    document.getElementById('choreCategoryInput').value = chore ? chore.category : '';
+    updateCategoryOptions();
+    setSegmentValue('choreDurationSegment', chore ? chore.duration_bucket : 'under5');
+    document.getElementById('choreModal').classList.remove('hidden');
+  }
+
+  function closeChoreModal() {
+    document.getElementById('choreModal').classList.add('hidden');
+    state.editingChoreId = null;
+  }
+
+  function updateCategoryOptions() {
+    var datalist = document.getElementById('categoryOptions');
+    var cats = Array.from(new Set(state.allChores.map(function (c) { return c.category; })));
+    datalist.innerHTML = cats.map(function (c) { return '<option value="' + escapeHtml(c) + '"></option>'; }).join('');
+  }
+
+  async function saveChoreFromModal() {
+    var name = document.getElementById('choreNameInput').value.trim();
+    var category = document.getElementById('choreCategoryInput').value.trim();
+    var duration = getSegmentValue('choreDurationSegment');
+    if (!name || !category || !duration) {
+      showToast('家事名・カテゴリ・目安時間を入力してください。', true);
+      return;
+    }
+    var saveBtn = document.getElementById('saveChoreBtn');
+    saveBtn.disabled = true;
+    try {
+      var res = await upsertChore({ id: state.editingChoreId, name: name, category: category, duration_bucket: duration });
+      if (res.error) throw res.error;
+      closeChoreModal();
+      await loadChores();
+      renderChoreManageList();
+      if (state.currentView === 'record') renderRecordView();
+      showToast('保存しました');
+    } catch (err) {
+      showToast('保存できませんでした。電波状況を確認してもう一度お試しください。', true);
+    } finally {
+      saveBtn.disabled = false;
+    }
   }
 
 })();

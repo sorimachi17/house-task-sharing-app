@@ -1,427 +1,898 @@
-const state = {
-  tab: "home",
-  activeUser: localStorage.getItem("kaji-log-user") || "a",
-  chores: [],
-  logs: [],
-  grassMonth: startOfMonth(new Date()),
-  weekStart: startOfWeek(new Date()),
-  statsMode: "week",
-  statsBase: new Date(),
-  editingLog: null,
-  selectedChore: null,
-  demoMode: CONFIG.SUPABASE_URL.includes("xxxx") || CONFIG.SUPABASE_ANON_KEY === "eyJ...",
-};
+(function () {
+  'use strict';
 
-const USERS = CONFIG.USERS;
-document.documentElement.style.setProperty("--a", USERS.a.color);
-document.documentElement.style.setProperty("--b", USERS.b.color);
-const db = state.demoMode ? null : supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-const DEMO_CHORES = [
-  ["掃除機", "掃除"], ["埃取り", "掃除"], ["散らかり片づける", "掃除"], ["トイレ掃除", "掃除"], ["洗面所掃除", "掃除"],
-  ["洗濯機回す", "洗濯"], ["洗濯干す", "洗濯"], ["洗濯畳む", "洗濯"], ["シーツ洗い", "洗濯"],
-  ["お風呂掃除(湯舟)", "風呂"], ["お風呂掃除(髪の毛取り)", "風呂"], ["お風呂掃除(洗い場)", "風呂"],
-  ["お皿洗い(一人分)", "キッチン"], ["お皿洗い(二人分)", "キッチン"], ["キッチンシンク", "キッチン"], ["コンロ", "キッチン"],
-  ["ゴミ出し(燃えるゴミ)", "ゴミ出し"], ["ゴミ出し(ペットボトル)", "ゴミ出し"], ["ゴミ出し(段ボール)", "ゴミ出し"], ["ゴミ出し(缶)", "ゴミ出し"],
-  ["シャンプー・ソープ補充", "買い物・補充"], ["R1買う", "買い物・補充"], ["水買う", "買い物・補充"], ["水やり", "その他"],
-].map(([name, category], index) => ({ id: `demo-${index + 1}`, name, category, sort_order: index + 1, is_active: true }));
+  var DEMO_MODE = CONFIG.SUPABASE_URL.indexOf('xxxx') !== -1 || CONFIG.SUPABASE_ANON_KEY === 'eyJ...';
+  var sb = DEMO_MODE ? null : window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
-document.addEventListener("DOMContentLoaded", init);
+  var CATEGORY_ORDER = ['掃除', '洗濯', '風呂', 'キッチン', 'ゴミ出し', '買い物・補充', 'その他'];
+  var WEEK_START_HOUR = 5;
+  var WEEK_END_HOUR = 25;
+  var WEEK_TOTAL_HOURS = WEEK_END_HOUR - WEEK_START_HOUR;
+  var HOUR_PX = 40;
+  var LEVEL_ALPHA = [0.06, 0.35, 0.65, 1];
+  var DEMO_LOGS_KEY = 'kajilog_demo_logs';
 
-async function init() {
-  renderUserToggle();
-  bindEvents();
-  renderWeekdays();
-  await loadChores();
-  await refreshCurrentView();
-}
-
-function bindEvents() {
-  document.querySelectorAll(".tab-bar button").forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tab));
+  var DEMO_CHORE_SEED = [
+    ['掃除機', '掃除'], ['埃取り', '掃除'], ['散らかり片づける', '掃除'], ['トイレ掃除', '掃除'], ['洗面所掃除', '掃除'],
+    ['洗濯機回す', '洗濯'], ['洗濯干す', '洗濯'], ['洗濯畳む', '洗濯'], ['シーツ洗い', '洗濯'],
+    ['お風呂掃除(湯舟)', '風呂'], ['お風呂掃除(髪の毛取り)', '風呂'], ['お風呂掃除(洗い場)', '風呂'],
+    ['お皿洗い(一人分)', 'キッチン'], ['お皿洗い(二人分)', 'キッチン'], ['キッチンシンク', 'キッチン'], ['コンロ', 'キッチン'],
+    ['ゴミ出し(燃えるゴミ)', 'ゴミ出し'], ['ゴミ出し(ペットボトル)', 'ゴミ出し'], ['ゴミ出し(段ボール)', 'ゴミ出し'], ['ゴミ出し(缶)', 'ゴミ出し'],
+    ['シャンプー・ソープ補充', '買い物・補充'], ['R1買う', '買い物・補充'], ['水買う', '買い物・補充'], ['水やり', 'その他']
+  ];
+  var DEMO_CHORES = DEMO_CHORE_SEED.map(function (item, index) {
+    return { id: 'demo-' + (index + 1), name: item[0], category: item[1], sort_order: index + 1, is_active: true };
   });
-  document.body.addEventListener("click", handleActionClick);
-  document.getElementById("logForm").addEventListener("submit", saveLog);
-  document.getElementById("doneByButtons").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-done-by]");
-    if (!button) return;
-    selectDoneBy(button.dataset.doneBy);
-  });
-  document.getElementById("statsMode").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-mode]");
-    if (!button) return;
-    state.statsMode = button.dataset.mode;
-    state.statsBase = new Date();
-    document.querySelectorAll("#statsMode button").forEach((b) => b.classList.toggle("is-selected", b === button));
-    renderStats();
-  });
-}
 
-async function loadChores() {
-  if (state.demoMode) {
-    state.chores = DEMO_CHORES;
-    renderHome();
-    showToast("Supabase未設定のため、この端末だけのデモモードで表示しています");
-    return;
-  }
-  const { data, error } = await db.from("chores").select("*").eq("is_active", true).order("category").order("sort_order");
-  if (error) return showToast("家事リストを読み込めませんでした。Supabase設定を確認してください");
-  state.chores = data || [];
-  renderHome();
-}
+  var state = {
+    currentUser: localStorage.getItem('kajilog_currentUser') || 'a',
+    currentView: 'record',
+    chores: [],
+    choresById: {},
+    grassMonth: startOfMonth(new Date()),
+    weekStart: startOfWeekMonday(new Date()),
+    summaryPeriod: 'week',
+    summaryAnchor: new Date(),
+    editingLogId: null,
+    modalChoreId: null,
+  };
 
-async function fetchLogs(start, end) {
-  if (state.demoMode) {
-    return readDemoLogs()
-      .filter((log) => {
-        const doneAt = new Date(log.done_at);
-        return doneAt >= start && doneAt < end;
-      })
-      .sort((a, b) => new Date(a.done_at) - new Date(b.done_at))
-      .map((log) => ({ ...log, chores: state.chores.find((chore) => chore.id === log.chore_id) }));
-  }
-  const { data, error } = await db
-    .from("logs")
-    .select("id,chore_id,done_by,done_at,created_at,chores(name,category)")
-    .gte("done_at", start.toISOString())
-    .lt("done_at", end.toISOString())
-    .order("done_at", { ascending: true });
-  if (error) {
-    showToast("記録を読み込めませんでした。電波状況を確認してください");
-    return [];
-  }
-  return data || [];
-}
+  // ---------- 日付ユーティリティ(すべて端末ローカル時刻で計算する) ----------
 
-function renderUserToggle() {
-  const wrap = document.getElementById("activeUserToggle");
-  wrap.innerHTML = ["a", "b"].map((id) => `<button type="button" data-user="${id}">${escapeHtml(USERS[id].name)}</button>`).join("");
-  wrap.querySelectorAll("button").forEach((button) => {
-    button.classList.toggle("is-selected", button.dataset.user === state.activeUser);
-    button.addEventListener("click", () => {
-      state.activeUser = button.dataset.user;
-      localStorage.setItem("kaji-log-user", state.activeUser);
-      renderUserToggle();
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function startOfDay(d) {
+    var r = new Date(d);
+    r.setHours(0, 0, 0, 0);
+    return r;
+  }
+
+  function addDays(d, n) {
+    var r = new Date(d);
+    r.setDate(r.getDate() + n);
+    return r;
+  }
+
+  function addHours(d, h) {
+    var r = new Date(d);
+    r.setHours(r.getHours() + h);
+    return r;
+  }
+
+  function startOfWeekMonday(d) {
+    var r = startOfDay(d);
+    var day = r.getDay();
+    var diff = day === 0 ? 6 : day - 1;
+    return addDays(r, -diff);
+  }
+
+  function startOfMonth(d) {
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  }
+
+  function addMonths(d, n) {
+    return new Date(d.getFullYear(), d.getMonth() + n, 1);
+  }
+
+  function dateKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function toDatetimeLocalValue(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function formatDateJp(d) {
+    var wd = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日(' + wd + ')';
+  }
+
+  function formatWeekLabel(weekStart) {
+    var end = addDays(weekStart, 6);
+    return (weekStart.getMonth() + 1) + '/' + weekStart.getDate() + ' – ' + (end.getMonth() + 1) + '/' + end.getDate();
+  }
+
+  // 5:00〜25:00の時間割上での表示日・表示位置(時)を求める。
+  // 1:00〜4:59の記録は前日の25:00側に丸めて表示する。
+  function getDisplaySlot(doneAtDate) {
+    var hourFloat = doneAtDate.getHours() + doneAtDate.getMinutes() / 60;
+    var displayDate = startOfDay(doneAtDate);
+    var displayHour = hourFloat;
+    if (hourFloat < WEEK_START_HOUR) {
+      displayDate = addDays(displayDate, -1);
+      displayHour = hourFloat + 24;
+      if (displayHour > WEEK_END_HOUR) displayHour = WEEK_END_HOUR;
+    }
+    return { displayDate: displayDate, displayHour: displayHour };
+  }
+
+  // ---------- その他ユーティリティ ----------
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
     });
-  });
-}
-
-function switchTab(tab) {
-  state.tab = tab;
-  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("is-active", view.id === `view-${tab}`));
-  document.querySelectorAll(".tab-bar button").forEach((button) => button.classList.toggle("is-active", button.dataset.tab === tab));
-  document.getElementById("screenTitle").textContent = { home: "記録", grass: "草", week: "週", stats: "集計" }[tab];
-  refreshCurrentView();
-}
-
-async function refreshCurrentView() {
-  if (state.tab === "home") return renderHome();
-  if (state.tab === "grass") return renderGrass();
-  if (state.tab === "week") return renderWeek();
-  return renderStats();
-}
-
-async function renderHome() {
-  renderChoresList();
-  const since = addDays(new Date(), -30);
-  const logs = await fetchLogs(startOfLocalDay(since), addDays(endOfLocalDay(new Date()), 1));
-  const counts = new Map();
-  logs.forEach((log) => counts.set(log.chore_id, (counts.get(log.chore_id) || 0) + 1));
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => state.chores.find((c) => c.id === id)).filter(Boolean);
-  document.getElementById("quickButtons").innerHTML = top.length
-    ? top.map((chore) => `<button type="button" data-open-log="${chore.id}">${escapeHtml(chore.name)}</button>`).join("")
-    : `<p class="empty">まだ記録がありません</p>`;
-}
-
-function renderChoresList() {
-  const grouped = groupBy(state.chores, "category");
-  document.getElementById("choresList").innerHTML = Object.entries(grouped).map(([category, chores]) => `
-    <section class="category">
-      <h2>${escapeHtml(category)}</h2>
-      ${chores.map((chore) => `<button class="chore-row" type="button" data-open-log="${chore.id}"><span>${escapeHtml(chore.name)}</span><span>＋</span></button>`).join("")}
-    </section>
-  `).join("");
-}
-
-async function renderGrass() {
-  const start = startOfMonth(state.grassMonth);
-  const end = addMonths(start, 1);
-  const logs = await fetchLogs(start, end);
-  state.logs = logs;
-  document.getElementById("grassTitle").textContent = `${start.getFullYear()}年 ${start.getMonth() + 1}月`;
-  const gridStart = startOfWeek(start);
-  const gridEnd = addDays(startOfWeek(end), 7);
-  const byDay = new Map();
-  logs.forEach((log) => {
-    const key = localDateKey(new Date(log.done_at));
-    if (!byDay.has(key)) byDay.set(key, []);
-    byDay.get(key).push(log);
-  });
-  let html = "";
-  for (let d = new Date(gridStart); d < gridEnd; d = addDays(d, 1)) {
-    const key = localDateKey(d);
-    const counts = countUsers(byDay.get(key) || []);
-    html += `<button class="day-cell ${d.getMonth() !== start.getMonth() ? "is-outside" : ""}" type="button" data-day="${key}">
-      <div class="day-inner">
-        <span class="day-num">${d.getDate()}</span>
-        <div class="day-half" style="background:${heat(USERS.a.color, counts.a)}"></div>
-        <div class="day-half" style="background:${heat(USERS.b.color, counts.b)}"></div>
-      </div>
-    </button>`;
   }
-  document.getElementById("calendarGrid").innerHTML = html;
-  const total = countUsers(logs);
-  document.getElementById("monthSummary").textContent = `${USERS.a.name} ${total.a}件 / ${USERS.b.name} ${total.b}件、うち二人で ${total.both}件`;
-}
 
-async function renderWeek() {
-  const start = state.weekStart;
-  const end = addDays(start, 7);
-  const logs = await fetchLogs(start, end);
-  document.getElementById("weekTitle").textContent = `${fmtDate(start)} - ${fmtDate(addDays(end, -1))}`;
-  const heads = ["時", "月", "火", "水", "木", "金", "土", "日"].map((v, i) => `<div class="${i ? "week-day-head" : "time-label"}">${v}</div>`).join("");
-  const lanes = Array.from({ length: 7 }, (_, i) => {
-    const dayLogs = logs.filter((log) => sameLocalDay(new Date(log.done_at), addDays(start, i)));
-    return `<div class="day-lane" style="grid-column:${i + 2};grid-row:2 / span 20">${dayLogs.map((log, index) => chipHtml(log, index)).join("")}</div>`;
-  }).join("");
-  const labels = Array.from({ length: 20 }, (_, i) => `<div class="time-label" style="grid-column:1;grid-row:${i + 2};">${i + 5}:00</div>`).join("");
-  document.getElementById("weekTable").innerHTML = heads + labels + lanes;
-}
+  function hexToRgb(hex) {
+    var m = hex.replace('#', '');
+    if (m.length === 3) m = m.split('').map(function (c) { return c + c; }).join('');
+    var num = parseInt(m, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
 
-async function renderStats() {
-  const rangeStart = state.statsMode === "week" ? startOfWeek(state.statsBase) : startOfMonth(state.statsBase);
-  const rangeEnd = state.statsMode === "week" ? addDays(rangeStart, 7) : addMonths(rangeStart, 1);
-  const logs = await fetchLogs(rangeStart, rangeEnd);
-  document.getElementById("statsTitle").textContent = state.statsMode === "week"
-    ? `${fmtDate(rangeStart)} - ${fmtDate(addDays(rangeEnd, -1))}`
-    : `${rangeStart.getFullYear()}年 ${rangeStart.getMonth() + 1}月`;
-  const total = countUsers(logs);
-  const max = Math.max(total.a, total.b, 1);
-  document.getElementById("statsBars").innerHTML = `
-    <div class="stat-card">
-      ${barHtml(USERS.a.name, total.a, max, USERS.a.color)}
-      ${barHtml(USERS.b.name, total.b, max, USERS.b.color)}
-      <strong>二人で ${total.both}件</strong>
-    </div>`;
-  const rows = state.chores.map((chore) => {
-    const target = logs.filter((log) => log.chore_id === chore.id);
-    const c = countUsers(target);
-    return { chore, ...c, total: target.length };
-  }).filter((row) => row.total > 0).sort((a, b) => b.total - a.total);
-  document.getElementById("statsRows").innerHTML = rows.length ? rows.map((row) => `
-    <tr><td>${escapeHtml(row.chore.name)}</td><td>${row.a}</td><td>${row.b}</td><td>${row.both}</td><td>${row.total}</td></tr>
-  `).join("") : `<tr><td colspan="5" class="empty">この期間の記録はありません</td></tr>`;
-}
+  function rgba(hex, a) {
+    var c = hexToRgb(hex);
+    return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
+  }
 
-function handleActionClick(event) {
-  const open = event.target.closest("[data-open-log]");
-  if (open) return openLogModal(open.dataset.openLog);
-  const day = event.target.closest("[data-day]");
-  if (day) return openDaySheet(day.dataset.day);
-  const action = event.target.closest("[data-action]")?.dataset.action;
-  if (!action) return;
-  if (action === "grass-prev") state.grassMonth = addMonths(state.grassMonth, -1), renderGrass();
-  if (action === "grass-next") state.grassMonth = addMonths(state.grassMonth, 1), renderGrass();
-  if (action === "week-prev") state.weekStart = addDays(state.weekStart, -7), renderWeek();
-  if (action === "week-next") state.weekStart = addDays(state.weekStart, 7), renderWeek();
-  if (action === "week-today") state.weekStart = startOfWeek(new Date()), renderWeek();
-  if (action === "stats-prev") moveStats(-1);
-  if (action === "stats-next") moveStats(1);
-  if (action === "sheet-close") closeSheet();
-  if (action === "modal-close") document.getElementById("logDialog").close();
-  if (action === "edit-log") editLog(event.target.dataset.id);
-  if (action === "delete-log") deleteLog(event.target.dataset.id);
-}
+  function countLevel(n) {
+    if (n <= 0) return 0;
+    if (n === 1) return 1;
+    if (n <= 3) return 2;
+    return 3;
+  }
 
-function openLogModal(choreId, log = null) {
-  state.selectedChore = state.chores.find((chore) => chore.id === choreId);
-  state.editingLog = log;
-  document.getElementById("modalMode").textContent = log ? "編集" : "記録";
-  document.getElementById("modalChoreName").textContent = state.selectedChore.name;
-  document.getElementById("doneAtInput").value = toDatetimeLocal(log ? new Date(log.done_at) : new Date());
-  selectDoneBy(log ? log.done_by : state.activeUser);
-  document.getElementById("logDialog").showModal();
-}
+  function dotColorForUser(u) {
+    if (u === 'a') return CONFIG.USERS.a.color;
+    if (u === 'b') return CONFIG.USERS.b.color;
+    return 'linear-gradient(135deg,' + CONFIG.USERS.a.color + ',' + CONFIG.USERS.b.color + ')';
+  }
 
-function selectDoneBy(value) {
-  document.querySelectorAll("#doneByButtons button").forEach((button) => button.classList.toggle("is-selected", button.dataset.doneBy === value));
-}
+  var toastTimer = null;
+  function showToast(msg, isError) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.toggle('error', !!isError);
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2400);
+  }
 
-async function saveLog(event) {
-  event.preventDefault();
-  const doneBy = document.querySelector("#doneByButtons .is-selected").dataset.doneBy;
-  const doneAt = new Date(document.getElementById("doneAtInput").value);
-  const payload = { chore_id: state.selectedChore.id, done_by: doneBy, done_at: doneAt.toISOString() };
-  if (state.demoMode) {
-    const logs = readDemoLogs();
-    if (state.editingLog) {
-      const index = logs.findIndex((log) => log.id === state.editingLog.id);
-      if (index >= 0) logs[index] = { ...logs[index], ...payload };
-    } else {
-      logs.push({ id: crypto.randomUUID(), ...payload, created_at: new Date().toISOString() });
+  function groupChoresByCategory(chores) {
+    var map = new Map();
+    chores.forEach(function (c) {
+      if (!map.has(c.category)) map.set(c.category, []);
+      map.get(c.category).push(c);
+    });
+    var orderedKeys = CATEGORY_ORDER.filter(function (k) { return map.has(k); })
+      .concat(Array.from(map.keys()).filter(function (k) { return CATEGORY_ORDER.indexOf(k) === -1; }));
+    return orderedKeys.map(function (k) { return { category: k, items: map.get(k) }; });
+  }
+
+  // ---------- 初期化 ----------
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  function init() {
+    applyUserTheme();
+    bindHeaderEvents();
+    bindTabBar();
+    bindModalEvents();
+    bindSheetEvents();
+    bindGrassNav();
+    bindWeekNav();
+    bindSummaryNav();
+    loadChores().then(renderCurrentView);
+  }
+
+  function applyUserTheme() {
+    document.documentElement.style.setProperty('--color-a', CONFIG.USERS.a.color);
+    document.documentElement.style.setProperty('--color-b', CONFIG.USERS.b.color);
+
+    document.querySelector('.user-toggle-btn[data-user="a"]').textContent = CONFIG.USERS.a.name;
+    document.querySelector('.user-toggle-btn[data-user="b"]').textContent = CONFIG.USERS.b.name;
+    updateUserToggleUI();
+
+    document.querySelector('#doneBySegment .segment-btn[data-value="a"]').textContent = CONFIG.USERS.a.name;
+    document.querySelector('#doneBySegment .segment-btn[data-value="b"]').textContent = CONFIG.USERS.b.name;
+
+    document.querySelector('.grass-legend').innerHTML =
+      '<span class="legend-swatch" style="background:' + CONFIG.USERS.a.color + '"></span>' + escapeHtml(CONFIG.USERS.a.name) + '=上半分&emsp;' +
+      '<span class="legend-swatch" style="background:' + CONFIG.USERS.b.color + '"></span>' + escapeHtml(CONFIG.USERS.b.name) + '=下半分';
+  }
+
+  function updateUserToggleUI() {
+    document.querySelectorAll('.user-toggle-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.user === state.currentUser);
+    });
+  }
+
+  function bindHeaderEvents() {
+    document.getElementById('userToggle').addEventListener('click', function (e) {
+      var btn = e.target.closest('.user-toggle-btn');
+      if (!btn) return;
+      state.currentUser = btn.dataset.user;
+      localStorage.setItem('kajilog_currentUser', state.currentUser);
+      updateUserToggleUI();
+    });
+  }
+
+  function bindTabBar() {
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { switchView(btn.dataset.view); });
+    });
+  }
+
+  function switchView(view) {
+    state.currentView = view;
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    document.querySelectorAll('.view').forEach(function (sec) {
+      sec.classList.toggle('hidden', sec.id !== 'view-' + view);
+    });
+    renderCurrentView();
+  }
+
+  function renderCurrentView() {
+    if (state.currentView === 'record') renderRecordView();
+    else if (state.currentView === 'grass') renderGrassView();
+    else if (state.currentView === 'week') renderWeekView();
+    else if (state.currentView === 'summary') renderSummaryView();
+  }
+
+  async function loadChores() {
+    if (DEMO_MODE) {
+      state.chores = DEMO_CHORES.slice().sort(function (a, b) { return a.sort_order - b.sort_order; });
+      state.choresById = {};
+      state.chores.forEach(function (c) { state.choresById[c.id] = c; });
+      seedDemoLogsIfEmpty();
+      document.getElementById('demoBadge').classList.remove('hidden');
+      showToast('Supabase未設定のため、この端末だけのデモモードで表示しています');
+      return;
+    }
+    var res = await sb.from('chores').select('*').eq('is_active', true);
+    if (res.error) {
+      showToast('家事一覧の取得に失敗しました。電波状況を確認してもう一度お試しください。', true);
+      state.chores = [];
+      return;
+    }
+    state.chores = res.data.slice().sort(function (a, b) { return a.sort_order - b.sort_order; });
+    state.choresById = {};
+    state.chores.forEach(function (c) { state.choresById[c.id] = c; });
+  }
+
+  // ---------- デモモード(Supabase未設定時、この端末のlocalStorageのみで完結する) ----------
+
+  function readDemoLogs() {
+    try {
+      return JSON.parse(localStorage.getItem(DEMO_LOGS_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeDemoLogs(logs) {
+    localStorage.setItem(DEMO_LOGS_KEY, JSON.stringify(logs));
+  }
+
+  function seedDemoLogsIfEmpty() {
+    if (readDemoLogs().length) return;
+    var doneByOptions = ['a', 'a', 'b', 'b', 'both'];
+    var logs = [];
+    var uid = 1;
+    for (var dayOffset = 44; dayOffset >= 0; dayOffset--) {
+      var day = addDays(startOfDay(new Date()), -dayOffset);
+      var entriesToday = Math.floor(Math.random() * 4);
+      for (var i = 0; i < entriesToday; i++) {
+        var chore = DEMO_CHORES[Math.floor(Math.random() * DEMO_CHORES.length)];
+        var hour = Math.random() < 0.06 ? Math.floor(Math.random() * 4) : Math.floor(Math.random() * 19) + 6;
+        var minute = Math.floor(Math.random() * 60);
+        var doneAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute);
+        logs.push({
+          id: 'demo-log-' + (uid++),
+          chore_id: chore.id,
+          done_by: doneByOptions[Math.floor(Math.random() * doneByOptions.length)],
+          done_at: doneAt.toISOString(),
+          created_at: doneAt.toISOString()
+        });
+      }
     }
     writeDemoLogs(logs);
-    document.getElementById("logDialog").close();
-    showToast("記録しました");
-    closeSheet();
-    refreshCurrentView();
-    return;
   }
-  const query = state.editingLog
-    ? db.from("logs").update(payload).eq("id", state.editingLog.id)
-    : db.from("logs").insert(payload);
-  const { error } = await query;
-  if (error) return showToast("保存できませんでした。電波状況を確認してもう一度お試しください");
-  document.getElementById("logDialog").close();
-  showToast("記録しました");
-  closeSheet();
-  refreshCurrentView();
-}
 
-function openDaySheet(key) {
-  const logs = state.logs.filter((log) => localDateKey(new Date(log.done_at)) === key);
-  document.getElementById("sheetTitle").textContent = key;
-  document.getElementById("sheetLogs").innerHTML = logs.length ? logs.map((log) => `
-    <div class="log-row">
-      <div><strong>${escapeHtml(log.chores?.name || choreName(log.chore_id))}</strong><span>${timeText(log.done_at)} / ${doneByLabel(log.done_by)}</span></div>
-      <div class="log-actions">
-        <button type="button" data-action="edit-log" data-id="${log.id}">編集</button>
-        <button type="button" data-action="delete-log" data-id="${log.id}">削除</button>
-      </div>
-    </div>`).join("") : `<p class="empty">この日の記録はありません</p>`;
-  document.getElementById("sheetBackdrop").hidden = false;
-}
+  // 以降、記録の取得・保存・削除はこの4関数を経由する。
+  // デモモードではlocalStorage、通常モードではSupabaseにアクセスする。
 
-function closeSheet() {
-  document.getElementById("sheetBackdrop").hidden = true;
-}
-
-function editLog(id) {
-  const log = state.logs.find((item) => item.id === id);
-  if (log) openLogModal(log.chore_id, log);
-}
-
-async function deleteLog(id) {
-  if (!confirm("この記録を削除しますか？")) return;
-  if (state.demoMode) {
-    writeDemoLogs(readDemoLogs().filter((log) => log.id !== id));
-    showToast("削除しました");
-    closeSheet();
-    renderGrass();
-    return;
+  async function fetchLogsRange(startDate, endDate) {
+    if (DEMO_MODE) {
+      var logs = readDemoLogs().filter(function (log) {
+        var t = new Date(log.done_at);
+        return t >= startDate && t < endDate;
+      });
+      return { data: logs, error: null };
+    }
+    return await sb.from('logs').select('*')
+      .gte('done_at', startDate.toISOString())
+      .lt('done_at', endDate.toISOString());
   }
-  const { error } = await db.from("logs").delete().eq("id", id);
-  if (error) return showToast("削除できませんでした。もう一度お試しください");
-  showToast("削除しました");
-  closeSheet();
-  renderGrass();
-}
 
-function moveStats(step) {
-  state.statsBase = state.statsMode === "week" ? addDays(state.statsBase, step * 7) : addMonths(state.statsBase, step);
-  renderStats();
-}
-
-function chipHtml(log, index) {
-  const date = new Date(log.done_at);
-  let hour = date.getHours() + date.getMinutes() / 60;
-  if (hour < 5) hour = 25;
-  const top = Math.min(Math.max((hour - 5) * 48, 0), 936);
-  const color = log.done_by === "a" ? USERS.a.color : USERS.b.color;
-  const cls = log.done_by === "both" ? "both-bg" : "";
-  const style = log.done_by === "both" ? `top:${top + (index % 3) * 8}px` : `top:${top + (index % 3) * 8}px;background:${color}`;
-  return `<div class="log-chip ${cls}" style="${style}" title="${escapeHtml(choreName(log.chore_id))}">${escapeHtml(shortName(choreName(log.chore_id)))}</div>`;
-}
-
-function renderWeekdays() {
-  document.querySelector(".weekday-row").innerHTML = ["月", "火", "水", "木", "金", "土", "日"].map((d) => `<span>${d}</span>`).join("");
-}
-
-function countUsers(logs) {
-  return logs.reduce((acc, log) => {
-    if (log.done_by === "both") acc.a++, acc.b++, acc.both++;
-    else acc[log.done_by]++;
-    return acc;
-  }, { a: 0, b: 0, both: 0 });
-}
-
-function barHtml(label, value, max, color) {
-  return `<div class="bar-row"><div class="bar-meta"><span>${escapeHtml(label)}</span><span>${value}件</span></div><div class="bar-track"><div class="bar-fill" style="width:${value / max * 100}%;background:${color}"></div></div></div>`;
-}
-
-function heat(color, count) {
-  const alpha = count === 0 ? .08 : count === 1 ? .32 : count <= 3 ? .62 : .92;
-  return hexToRgba(color, alpha);
-}
-function hexToRgba(hex, alpha) {
-  const n = parseInt(hex.replace("#", ""), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
-}
-function groupBy(items, key) {
-  return items.reduce((acc, item) => ((acc[item[key]] ||= []).push(item), acc), {});
-}
-function choreName(id) {
-  return state.chores.find((chore) => chore.id === id)?.name || "家事";
-}
-function shortName(name) {
-  return name.length > 7 ? `${name.slice(0, 7)}…` : name;
-}
-function doneByLabel(value) {
-  return value === "both" ? "二人で" : USERS[value].name;
-}
-function showToast(message) {
-  const toast = document.getElementById("toast");
-  toast.textContent = message;
-  toast.classList.add("is-visible");
-  setTimeout(() => toast.classList.remove("is-visible"), 2800);
-}
-function startOfLocalDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-function endOfLocalDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-}
-function startOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-function addMonths(date, months) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
-}
-function startOfWeek(date) {
-  const d = startOfLocalDay(date);
-  const diff = (d.getDay() + 6) % 7;
-  return addDays(d, -diff);
-}
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-function localDateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-function sameLocalDay(a, b) {
-  return localDateKey(a) === localDateKey(b);
-}
-function toDatetimeLocal(date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-function fmtDate(date) {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-function timeText(value) {
-  return new Date(value).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-}
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (s) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
-}
-function readDemoLogs() {
-  try {
-    return JSON.parse(localStorage.getItem("kaji-log-demo-logs") || "[]");
-  } catch {
-    return [];
+  async function fetchChoreIdsSince(sinceDate) {
+    if (DEMO_MODE) {
+      var logs = readDemoLogs().filter(function (log) { return new Date(log.done_at) >= sinceDate; });
+      return { data: logs.map(function (l) { return { chore_id: l.chore_id }; }), error: null };
+    }
+    return await sb.from('logs').select('chore_id').gte('done_at', sinceDate.toISOString());
   }
-}
-function writeDemoLogs(logs) {
-  localStorage.setItem("kaji-log-demo-logs", JSON.stringify(logs));
-}
+
+  async function insertLogRecord(payload) {
+    if (DEMO_MODE) {
+      var logs = readDemoLogs();
+      logs.push({
+        id: 'demo-log-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        chore_id: payload.chore_id,
+        done_by: payload.done_by,
+        done_at: payload.done_at,
+        created_at: new Date().toISOString()
+      });
+      writeDemoLogs(logs);
+      return { error: null };
+    }
+    return await sb.from('logs').insert(payload);
+  }
+
+  async function updateLogRecord(id, payload) {
+    if (DEMO_MODE) {
+      var logs = readDemoLogs();
+      var idx = logs.findIndex(function (l) { return l.id === id; });
+      if (idx >= 0) logs[idx] = Object.assign({}, logs[idx], payload);
+      writeDemoLogs(logs);
+      return { error: null };
+    }
+    return await sb.from('logs').update(payload).eq('id', id);
+  }
+
+  async function deleteLogRecord(id) {
+    if (DEMO_MODE) {
+      writeDemoLogs(readDemoLogs().filter(function (l) { return l.id !== id; }));
+      return { error: null };
+    }
+    return await sb.from('logs').delete().eq('id', id);
+  }
+
+  // ---------- 記録タブ ----------
+
+  async function renderRecordView() {
+    var listEl = document.getElementById('choreList');
+    var quickEl = document.getElementById('quickButtons');
+
+    listEl.innerHTML = '';
+    if (!state.chores.length) {
+      listEl.innerHTML = '<div class="empty-state">家事一覧を読み込めませんでした</div>';
+    }
+    groupChoresByCategory(state.chores).forEach(function (g) {
+      var catDiv = document.createElement('div');
+      catDiv.className = 'chore-category';
+      var title = document.createElement('div');
+      title.className = 'chore-category-title';
+      title.textContent = g.category;
+      catDiv.appendChild(title);
+      g.items.forEach(function (chore) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'chore-row';
+        row.innerHTML = '<span>' + escapeHtml(chore.name) + '</span><span class="chore-row-arrow">›</span>';
+        row.addEventListener('click', function () { openRecordModal({ choreId: chore.id }); });
+        catDiv.appendChild(row);
+      });
+      listEl.appendChild(catDiv);
+    });
+
+    quickEl.innerHTML = '';
+    var since = addDays(startOfDay(new Date()), -29);
+    var res = await fetchChoreIdsSince(since);
+    if (res.error) return;
+    var counts = {};
+    res.data.forEach(function (row) { counts[row.chore_id] = (counts[row.chore_id] || 0) + 1; });
+    var top3 = Object.keys(counts)
+      .filter(function (id) { return state.choresById[id]; })
+      .sort(function (a, b) { return counts[b] - counts[a]; })
+      .slice(0, 3);
+    top3.forEach(function (id) {
+      var chore = state.choresById[id];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'quick-btn';
+      btn.textContent = chore.name;
+      btn.addEventListener('click', function () { openRecordModal({ choreId: id }); });
+      quickEl.appendChild(btn);
+    });
+  }
+
+  // ---------- 記録モーダル ----------
+
+  function openRecordModal(opts) {
+    var log = opts.log;
+    state.modalChoreId = opts.choreId || (log && log.chore_id);
+    state.editingLogId = log ? log.id : null;
+    var chore = state.choresById[state.modalChoreId];
+    document.getElementById('recordModalTitle').textContent = chore ? chore.name : '(削除済みの家事)';
+
+    setSegmentValue('doneBySegment', log ? log.done_by : state.currentUser);
+    styleDoneBySegment();
+
+    var doneAt = log ? new Date(log.done_at) : new Date();
+    document.getElementById('doneAtInput').value = toDatetimeLocalValue(doneAt);
+
+    document.getElementById('deleteLogBtn').classList.toggle('hidden', !log);
+    document.getElementById('recordModal').classList.remove('hidden');
+  }
+
+  function closeRecordModal() {
+    document.getElementById('recordModal').classList.add('hidden');
+    state.modalChoreId = null;
+    state.editingLogId = null;
+  }
+
+  function setSegmentValue(containerId, value) {
+    document.querySelectorAll('#' + containerId + ' .segment-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.value === value);
+    });
+  }
+
+  function getSegmentValue(containerId) {
+    var active = document.querySelector('#' + containerId + ' .segment-btn.active');
+    return active ? active.dataset.value : null;
+  }
+
+  function styleDoneBySegment() {
+    document.querySelectorAll('#doneBySegment .segment-btn').forEach(function (btn) {
+      if (btn.classList.contains('active')) {
+        btn.style.background = dotColorForUser(btn.dataset.value);
+        btn.style.borderColor = btn.dataset.value === 'both' ? 'transparent' : dotColorForUser(btn.dataset.value);
+        btn.style.color = '#fff';
+      } else {
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }
+    });
+  }
+
+  function bindModalEvents() {
+    document.getElementById('doneBySegment').addEventListener('click', function (e) {
+      var btn = e.target.closest('.segment-btn');
+      if (!btn) return;
+      setSegmentValue('doneBySegment', btn.dataset.value);
+      styleDoneBySegment();
+    });
+    document.getElementById('cancelRecordBtn').addEventListener('click', closeRecordModal);
+    document.getElementById('saveRecordBtn').addEventListener('click', saveRecord);
+    document.getElementById('deleteLogBtn').addEventListener('click', deleteRecordFromModal);
+    document.getElementById('recordModal').addEventListener('click', function (e) {
+      if (e.target.id === 'recordModal') closeRecordModal();
+    });
+  }
+
+  async function saveRecord() {
+    var doneBy = getSegmentValue('doneBySegment');
+    var doneAtStr = document.getElementById('doneAtInput').value;
+    if (!doneBy || !doneAtStr) {
+      showToast('実施者と日時を入力してください。', true);
+      return;
+    }
+    var doneAtIso = new Date(doneAtStr).toISOString();
+    var saveBtn = document.getElementById('saveRecordBtn');
+    saveBtn.disabled = true;
+    try {
+      var error;
+      if (state.editingLogId) {
+        ({ error } = await updateLogRecord(state.editingLogId, { done_by: doneBy, done_at: doneAtIso }));
+      } else {
+        ({ error } = await insertLogRecord({ chore_id: state.modalChoreId, done_by: doneBy, done_at: doneAtIso }));
+      }
+      if (error) throw error;
+      closeRecordModal();
+      closeListSheet();
+      showToast('記録しました');
+      renderCurrentView();
+    } catch (err) {
+      showToast('保存できませんでした。電波状況を確認してもう一度お試しください。', true);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+
+  async function deleteRecordFromModal() {
+    if (!state.editingLogId) return;
+    await deleteLogById(state.editingLogId);
+    closeRecordModal();
+  }
+
+  async function quickDeleteLog(id) {
+    await deleteLogById(id);
+  }
+
+  async function deleteLogById(id) {
+    if (!confirm('この記録を削除しますか？')) return;
+    try {
+      var { error } = await deleteLogRecord(id);
+      if (error) throw error;
+      closeListSheet();
+      showToast('削除しました');
+      renderCurrentView();
+    } catch (err) {
+      showToast('削除できませんでした。電波状況を確認してもう一度お試しください。', true);
+    }
+  }
+
+  // ---------- 一覧ボトムシート(草タブ・週タブ共通) ----------
+
+  function openListSheet(title, logs) {
+    document.getElementById('listSheetTitle').textContent = title;
+    var body = document.getElementById('listSheetBody');
+    body.innerHTML = '';
+    if (!logs.length) {
+      body.innerHTML = '<div class="empty-state">記録はありません</div>';
+    }
+    logs.slice().sort(function (a, b) { return new Date(a.done_at) - new Date(b.done_at); }).forEach(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var item = document.createElement('div');
+      item.className = 'sheet-item';
+
+      var dot = document.createElement('span');
+      dot.className = 'sheet-item-dot';
+      dot.style.background = dotColorForUser(log.done_by);
+
+      var main = document.createElement('div');
+      main.className = 'sheet-item-main';
+      var t = new Date(log.done_at);
+      main.innerHTML = '<div class="sheet-item-time">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + '</div>' +
+        '<div class="sheet-item-name">' + escapeHtml(chore ? chore.name : '(削除済みの家事)') + '</div>';
+
+      var actions = document.createElement('div');
+      actions.className = 'sheet-item-actions';
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'icon-btn';
+      editBtn.textContent = '✎';
+      editBtn.addEventListener('click', function () { openRecordModal({ log: log }); });
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'icon-btn';
+      delBtn.textContent = '🗑';
+      delBtn.addEventListener('click', function () { quickDeleteLog(log.id); });
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+
+      item.appendChild(dot);
+      item.appendChild(main);
+      item.appendChild(actions);
+      body.appendChild(item);
+    });
+    document.getElementById('listSheet').classList.remove('hidden');
+  }
+
+  function closeListSheet() {
+    document.getElementById('listSheet').classList.add('hidden');
+  }
+
+  function bindSheetEvents() {
+    document.getElementById('closeListSheetBtn').addEventListener('click', closeListSheet);
+    document.getElementById('listSheet').addEventListener('click', function (e) {
+      if (e.target.id === 'listSheet') closeListSheet();
+    });
+  }
+
+  // ---------- 草タブ ----------
+
+  function bindGrassNav() {
+    document.getElementById('grassPrevBtn').addEventListener('click', function () {
+      state.grassMonth = addMonths(state.grassMonth, -1);
+      renderGrassView();
+    });
+    document.getElementById('grassNextBtn').addEventListener('click', function () {
+      state.grassMonth = addMonths(state.grassMonth, 1);
+      renderGrassView();
+    });
+  }
+
+  async function renderGrassView() {
+    document.getElementById('grassMonthLabel').textContent =
+      state.grassMonth.getFullYear() + '年' + (state.grassMonth.getMonth() + 1) + '月';
+
+    var rangeStart = state.grassMonth;
+    var rangeEnd = addMonths(state.grassMonth, 1);
+    var res = await fetchLogsRange(rangeStart, rangeEnd);
+
+    var grid = document.getElementById('grassGrid');
+    var summaryEl = document.getElementById('grassSummary');
+
+    if (res.error) {
+      grid.innerHTML = '';
+      summaryEl.innerHTML = '<div class="empty-state">読み込みに失敗しました。電波状況を確認してもう一度お試しください。</div>';
+      return;
+    }
+    var data = res.data;
+
+    var byDay = {};
+    data.forEach(function (log) {
+      var key = dateKey(new Date(log.done_at));
+      if (!byDay[key]) byDay[key] = { a: 0, b: 0, logs: [] };
+      byDay[key].logs.push(log);
+      if (log.done_by === 'a' || log.done_by === 'both') byDay[key].a++;
+      if (log.done_by === 'b' || log.done_by === 'both') byDay[key].b++;
+    });
+
+    grid.innerHTML = '';
+    var leadingBlank = rangeStart.getDay() === 0 ? 6 : rangeStart.getDay() - 1;
+    for (var i = 0; i < leadingBlank; i++) {
+      var blank = document.createElement('div');
+      blank.className = 'grass-cell empty';
+      grid.appendChild(blank);
+    }
+    var daysInMonth = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, 0).getDate();
+    for (var d = 1; d <= daysInMonth; d++) {
+      var date = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), d);
+      var key2 = dateKey(date);
+      var info = byDay[key2] || { a: 0, b: 0, logs: [] };
+      var cell = document.createElement('div');
+      cell.className = 'grass-cell';
+
+      var topHalf = document.createElement('div');
+      topHalf.className = 'grass-cell-half';
+      topHalf.style.background = rgba(CONFIG.USERS.a.color, LEVEL_ALPHA[countLevel(info.a)]);
+      var bottomHalf = document.createElement('div');
+      bottomHalf.className = 'grass-cell-half';
+      bottomHalf.style.background = rgba(CONFIG.USERS.b.color, LEVEL_ALPHA[countLevel(info.b)]);
+
+      var dateLabel = document.createElement('span');
+      dateLabel.className = 'grass-cell-date';
+      dateLabel.textContent = String(d);
+
+      cell.appendChild(dateLabel);
+      cell.appendChild(topHalf);
+      cell.appendChild(bottomHalf);
+      cell.addEventListener('click', function (dateArg, logsArg) {
+        return function () { openListSheet(formatDateJp(dateArg), logsArg); };
+      }(date, info.logs));
+      grid.appendChild(cell);
+    }
+
+    var sumA = 0, sumB = 0, sumBoth = 0;
+    data.forEach(function (log) {
+      if (log.done_by === 'a') sumA++;
+      else if (log.done_by === 'b') sumB++;
+      else { sumA++; sumB++; sumBoth++; }
+    });
+    summaryEl.innerHTML = '今月: ' + escapeHtml(CONFIG.USERS.a.name) + ' ' + sumA + '件 / ' +
+      escapeHtml(CONFIG.USERS.b.name) + ' ' + sumB + '件<br>うち二人で ' + sumBoth + '件';
+  }
+
+  // ---------- 週タブ ----------
+
+  function bindWeekNav() {
+    document.getElementById('weekPrevBtn').addEventListener('click', function () {
+      state.weekStart = addDays(state.weekStart, -7);
+      renderWeekView();
+    });
+    document.getElementById('weekNextBtn').addEventListener('click', function () {
+      state.weekStart = addDays(state.weekStart, 7);
+      renderWeekView();
+    });
+    document.getElementById('weekTodayBtn').addEventListener('click', function () {
+      state.weekStart = startOfWeekMonday(new Date());
+      renderWeekView();
+    });
+  }
+
+  async function renderWeekView() {
+    document.getElementById('weekLabel').textContent = formatWeekLabel(state.weekStart);
+
+    var fetchStart = state.weekStart;
+    var fetchEnd = addHours(addDays(state.weekStart, 7), WEEK_START_HOUR);
+    var res = await fetchLogsRange(fetchStart, fetchEnd);
+
+    var timetable = document.getElementById('weekTimetable');
+    if (res.error) {
+      timetable.innerHTML = '<div class="empty-state">読み込みに失敗しました。電波状況を確認してもう一度お試しください。</div>';
+      return;
+    }
+
+    var dayBuckets = {};
+    var dayKeysInOrder = [];
+    for (var i = 0; i < 7; i++) {
+      var k = dateKey(addDays(state.weekStart, i));
+      dayKeysInOrder.push(k);
+      dayBuckets[k] = [];
+    }
+
+    res.data.forEach(function (log) {
+      var slot = getDisplaySlot(new Date(log.done_at));
+      var key = dateKey(slot.displayDate);
+      if (dayBuckets[key]) dayBuckets[key].push({ log: log, displayHour: slot.displayHour });
+    });
+
+    buildWeekTimetableDom(timetable, dayKeysInOrder, dayBuckets);
+  }
+
+  function buildWeekTimetableDom(container, dayKeysInOrder, dayBuckets) {
+    container.innerHTML = '';
+    container.style.setProperty('--hour-px', HOUR_PX + 'px');
+
+    var corner = document.createElement('div');
+    corner.className = 'week-time-axis';
+    corner.style.height = '24px';
+    container.appendChild(corner);
+
+    var weekdayNames = ['月', '火', '水', '木', '金', '土', '日'];
+    dayKeysInOrder.forEach(function (key, i) {
+      var parts = key.split('-');
+      var header = document.createElement('div');
+      header.className = 'week-day-header';
+      header.textContent = Number(parts[1]) + '/' + Number(parts[2]) + '(' + weekdayNames[i] + ')';
+      container.appendChild(header);
+    });
+
+    var axis = document.createElement('div');
+    axis.className = 'week-time-axis';
+    axis.style.height = (WEEK_TOTAL_HOURS * HOUR_PX) + 'px';
+    for (var h = WEEK_START_HOUR; h <= WEEK_END_HOUR; h++) {
+      var lbl = document.createElement('span');
+      lbl.className = 'week-time-label';
+      lbl.style.top = ((h - WEEK_START_HOUR) * HOUR_PX) + 'px';
+      lbl.textContent = (h % 24) + ':00';
+      axis.appendChild(lbl);
+    }
+    container.appendChild(axis);
+
+    dayKeysInOrder.forEach(function (key) {
+      var col = document.createElement('div');
+      col.className = 'week-day-col';
+      col.style.height = (WEEK_TOTAL_HOURS * HOUR_PX) + 'px';
+
+      var buckets = groupByTimeSlot(dayBuckets[key]);
+      buckets.forEach(function (bucket) {
+        var top = (bucket.hour - WEEK_START_HOUR) * HOUR_PX;
+        var maxShow = 3;
+        var shown = bucket.items.slice(0, maxShow);
+        var overflow = bucket.items.length - shown.length;
+        var slotCount = shown.length + (overflow > 0 ? 1 : 0);
+        var widthPct = 100 / slotCount;
+
+        shown.forEach(function (item, idx) {
+          var chip = document.createElement('div');
+          chip.className = 'week-chip user-' + item.log.done_by;
+          chip.style.top = top + 'px';
+          chip.style.height = '18px';
+          chip.style.left = (idx * widthPct) + '%';
+          chip.style.width = Math.max(widthPct - 2, 4) + '%';
+          var chore = state.choresById[item.log.chore_id];
+          chip.textContent = chore ? chore.name.slice(0, 4) : '?';
+          chip.addEventListener('click', function () {
+            openListSheet('この時間帯の記録', bucket.items.map(function (i) { return i.log; }));
+          });
+          col.appendChild(chip);
+        });
+        if (overflow > 0) {
+          var more = document.createElement('div');
+          more.className = 'week-chip user-both';
+          more.style.top = top + 'px';
+          more.style.height = '18px';
+          more.style.left = (shown.length * widthPct) + '%';
+          more.style.width = Math.max(widthPct - 2, 4) + '%';
+          more.textContent = '+' + overflow;
+          more.addEventListener('click', function () {
+            openListSheet('この時間帯の記録', bucket.items.map(function (i) { return i.log; }));
+          });
+          col.appendChild(more);
+        }
+      });
+
+      container.appendChild(col);
+    });
+  }
+
+  function groupByTimeSlot(entries) {
+    var map = new Map();
+    entries.forEach(function (item) {
+      var rounded = Math.round(item.displayHour * 4) / 4;
+      if (!map.has(rounded)) map.set(rounded, []);
+      map.get(rounded).push(item);
+    });
+    return Array.from(map.entries())
+      .map(function (e) { return { hour: e[0], items: e[1] }; })
+      .sort(function (a, b) { return a.hour - b.hour; });
+  }
+
+  // ---------- 集計タブ ----------
+
+  function bindSummaryNav() {
+    document.getElementById('summaryPeriodToggle').addEventListener('click', function (e) {
+      var btn = e.target.closest('.segment-btn');
+      if (!btn) return;
+      state.summaryPeriod = btn.dataset.period;
+      document.querySelectorAll('#summaryPeriodToggle .segment-btn').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      state.summaryAnchor = new Date();
+      renderSummaryView();
+    });
+    document.getElementById('summaryPrevBtn').addEventListener('click', function () {
+      shiftSummaryAnchor(-1);
+      renderSummaryView();
+    });
+    document.getElementById('summaryNextBtn').addEventListener('click', function () {
+      shiftSummaryAnchor(1);
+      renderSummaryView();
+    });
+  }
+
+  function shiftSummaryAnchor(dir) {
+    if (state.summaryPeriod === 'week') {
+      state.summaryAnchor = addDays(state.summaryAnchor, dir * 7);
+    } else {
+      state.summaryAnchor = addMonths(startOfMonth(state.summaryAnchor), dir);
+    }
+  }
+
+  function getSummaryRange() {
+    if (state.summaryPeriod === 'week') {
+      var start = startOfWeekMonday(state.summaryAnchor);
+      return { start: start, end: addDays(start, 7), label: formatWeekLabel(start) };
+    }
+    var mStart = startOfMonth(state.summaryAnchor);
+    return { start: mStart, end: addMonths(mStart, 1), label: mStart.getFullYear() + '年' + (mStart.getMonth() + 1) + '月' };
+  }
+
+  async function renderSummaryView() {
+    var range = getSummaryRange();
+    document.getElementById('summaryLabel').textContent = range.label;
+
+    var res = await fetchLogsRange(range.start, range.end);
+
+    var barsEl = document.getElementById('summaryBars');
+    var tbody = document.getElementById('summaryTableBody');
+
+    if (res.error) {
+      barsEl.innerHTML = '<div class="empty-state">読み込みに失敗しました。電波状況を確認してもう一度お試しください。</div>';
+      tbody.innerHTML = '';
+      return;
+    }
+    var data = res.data;
+
+    var countA = 0, countB = 0, countBoth = 0;
+    var perChore = {};
+    data.forEach(function (log) {
+      if (!perChore[log.chore_id]) perChore[log.chore_id] = { aRaw: 0, bRaw: 0, bothRaw: 0 };
+      var p = perChore[log.chore_id];
+      if (log.done_by === 'a') { countA++; p.aRaw++; }
+      else if (log.done_by === 'b') { countB++; p.bRaw++; }
+      else { countA++; countB++; countBoth++; p.bothRaw++; }
+    });
+
+    var maxCount = Math.max(countA, countB, 1);
+    barsEl.innerHTML =
+      barRowHtml(CONFIG.USERS.a.name, countA, maxCount, CONFIG.USERS.a.color) +
+      barRowHtml(CONFIG.USERS.b.name, countB, maxCount, CONFIG.USERS.b.color) +
+      '<div class="summary-both-note">うち二人で: ' + countBoth + '件</div>';
+
+    var rows = Object.keys(perChore).map(function (id) {
+      var p = perChore[id];
+      var chore = state.choresById[id];
+      return {
+        name: chore ? chore.name : '(削除済み)',
+        a: p.aRaw + p.bothRaw,
+        b: p.bRaw + p.bothRaw,
+        both: p.bothRaw,
+        total: p.aRaw + p.bRaw + p.bothRaw
+      };
+    }).sort(function (x, y) { return y.total - x.total; });
+
+    tbody.innerHTML = rows.length ? rows.map(function (r) {
+      return '<tr><td>' + escapeHtml(r.name) + '</td><td>' + r.a + '</td><td>' + r.b + '</td><td>' + r.both + '</td><td>' + r.total + '</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="empty-state">記録はありません</td></tr>';
+  }
+
+  function barRowHtml(name, count, max, color) {
+    var pct = Math.round((count / max) * 100);
+    return '<div class="summary-bar-row">' +
+      '<div class="summary-bar-label">' + escapeHtml(name) + '</div>' +
+      '<div class="summary-bar-track"><div class="summary-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+      '<div class="summary-bar-count">' + count + '</div>' +
+      '</div>';
+  }
+
+})();

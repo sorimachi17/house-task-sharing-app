@@ -1,115 +1,134 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="KAJI LOG">
-    <meta name="theme-color" content="#2A9D8F">
-    <title>KAJI LOG</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232A9D8F'/%3E%3Cpath d='M17 35h30v8H17zM21 19h22v10H21z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="style.css?v=20260705-2">
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">KAJI LOG</p>
-          <h1 id="screenTitle">記録</h1>
-        </div>
-        <div class="user-toggle" id="activeUserToggle" aria-label="操作ユーザー"></div>
-      </header>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="家事ログ">
+<meta name="theme-color" content="#2A9D8F">
+<title>KAJI LOG | 家事ログ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23fff'/%3E%3Cpath d='M32 2a30 30 0 0 0 0 60z' fill='%232A9D8F'/%3E%3Cpath d='M32 2a30 30 0 0 1 0 60z' fill='%23E9A03B'/%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-      <main>
-        <section class="view is-active" id="view-home" aria-labelledby="tab-home">
-          <div class="quick-area">
-            <h2>最近よく記録</h2>
-            <div class="quick-buttons" id="quickButtons"></div>
-          </div>
-          <div id="choresList"></div>
-        </section>
+<header class="app-header">
+  <h1 class="app-title">KAJI LOG<span id="demoBadge" class="demo-badge hidden">DEMO</span></h1>
+  <div class="user-toggle" id="userToggle">
+    <button type="button" class="user-toggle-btn" data-user="a">A</button>
+    <button type="button" class="user-toggle-btn" data-user="b">B</button>
+  </div>
+</header>
 
-        <section class="view" id="view-grass" aria-labelledby="tab-grass">
-          <div class="period-nav">
-            <button type="button" data-action="grass-prev" aria-label="前月">‹</button>
-            <strong id="grassTitle"></strong>
-            <button type="button" data-action="grass-next" aria-label="次月">›</button>
-          </div>
-          <div class="weekday-row"></div>
-          <div class="calendar-grid" id="calendarGrid"></div>
-          <div class="summary-strip" id="monthSummary"></div>
-        </section>
+<main id="main">
 
-        <section class="view" id="view-week" aria-labelledby="tab-week">
-          <div class="period-nav">
-            <button type="button" data-action="week-prev" aria-label="前週">‹</button>
-            <strong id="weekTitle"></strong>
-            <button type="button" data-action="week-next" aria-label="次週">›</button>
-          </div>
-          <button class="ghost-button" type="button" data-action="week-today">今週</button>
-          <div class="timetable" id="weekTable"></div>
-        </section>
+  <!-- 記録タブ -->
+  <section id="view-record" class="view">
+    <div class="quick-buttons" id="quickButtons"></div>
+    <div class="chore-list" id="choreList"></div>
+  </section>
 
-        <section class="view" id="view-stats" aria-labelledby="tab-stats">
-          <div class="segmented wide" id="statsMode">
-            <button type="button" data-mode="week" class="is-selected">今週</button>
-            <button type="button" data-mode="month">今月</button>
-          </div>
-          <div class="period-nav">
-            <button type="button" data-action="stats-prev" aria-label="前期間">‹</button>
-            <strong id="statsTitle"></strong>
-            <button type="button" data-action="stats-next" aria-label="次期間">›</button>
-          </div>
-          <div id="statsBars"></div>
-          <div class="stats-table-wrap">
-            <table class="stats-table">
-              <thead><tr><th>家事名</th><th>A</th><th>B</th><th>二人で</th><th>計</th></tr></thead>
-              <tbody id="statsRows"></tbody>
-            </table>
-          </div>
-        </section>
-      </main>
-
-      <nav class="tab-bar" aria-label="画面切り替え">
-        <button id="tab-home" class="is-active" data-tab="home" type="button">記録</button>
-        <button id="tab-grass" data-tab="grass" type="button">草</button>
-        <button id="tab-week" data-tab="week" type="button">週</button>
-        <button id="tab-stats" data-tab="stats" type="button">集計</button>
-      </nav>
+  <!-- 草タブ -->
+  <section id="view-grass" class="view hidden">
+    <div class="period-nav">
+      <button type="button" class="nav-btn" id="grassPrevBtn" aria-label="前月">‹</button>
+      <div class="period-label" id="grassMonthLabel"></div>
+      <button type="button" class="nav-btn" id="grassNextBtn" aria-label="翌月">›</button>
     </div>
-
-    <dialog id="logDialog">
-      <form method="dialog" class="modal-card" id="logForm">
-        <button class="close-button" type="button" data-action="modal-close" aria-label="閉じる">×</button>
-        <p class="eyebrow" id="modalMode">記録</p>
-        <h2 id="modalChoreName"></h2>
-        <label>実施者</label>
-        <div class="segmented" id="doneByButtons">
-          <button type="button" data-done-by="a">A</button>
-          <button type="button" data-done-by="b">B</button>
-          <button type="button" data-done-by="both">二人で</button>
-        </div>
-        <label for="doneAtInput">日時</label>
-        <input id="doneAtInput" type="datetime-local" required>
-        <button class="primary-button" type="submit">保存</button>
-      </form>
-    </dialog>
-
-    <div class="sheet-backdrop" id="sheetBackdrop" hidden>
-      <section class="bottom-sheet" aria-label="記録一覧">
-        <div class="sheet-handle"></div>
-        <div class="sheet-head">
-          <h2 id="sheetTitle"></h2>
-          <button type="button" class="ghost-button" data-action="sheet-close">閉じる</button>
-        </div>
-        <div id="sheetLogs"></div>
-      </section>
+    <div class="grass-weekday-row">
+      <span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span>
     </div>
+    <div class="grass-grid" id="grassGrid"></div>
+    <div class="grass-legend">
+      <span class="legend-swatch" style="background:var(--color-a)"></span>A=上半分
+      <span class="legend-swatch" style="background:var(--color-b)"></span>B=下半分
+    </div>
+    <div class="month-summary" id="grassSummary"></div>
+  </section>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <!-- 週タブ -->
+  <section id="view-week" class="view hidden">
+    <div class="period-nav">
+      <button type="button" class="nav-btn" id="weekPrevBtn" aria-label="前週">‹</button>
+      <div class="period-label" id="weekLabel"></div>
+      <button type="button" class="nav-btn" id="weekNextBtn" aria-label="翌週">›</button>
+    </div>
+    <button type="button" class="btn-ghost btn-small" id="weekTodayBtn">今週</button>
+    <div class="week-timetable" id="weekTimetable"></div>
+  </section>
 
-    <script src="config.js?v=20260705-2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js?v=20260705-2"></script>
-  </body>
+  <!-- 集計タブ -->
+  <section id="view-summary" class="view hidden">
+    <div class="summary-period-toggle" id="summaryPeriodToggle">
+      <button type="button" class="segment-btn active" data-period="week">今週</button>
+      <button type="button" class="segment-btn" data-period="month">今月</button>
+    </div>
+    <div class="period-nav">
+      <button type="button" class="nav-btn" id="summaryPrevBtn" aria-label="前の期間">‹</button>
+      <div class="period-label" id="summaryLabel"></div>
+      <button type="button" class="nav-btn" id="summaryNextBtn" aria-label="次の期間">›</button>
+    </div>
+    <div class="summary-bars" id="summaryBars"></div>
+    <table class="summary-table" id="summaryTable">
+      <thead>
+        <tr><th>家事</th><th>A</th><th>B</th><th>二人で</th><th>計</th></tr>
+      </thead>
+      <tbody id="summaryTableBody"></tbody>
+    </table>
+  </section>
+
+</main>
+
+<nav class="tab-bar">
+  <button type="button" class="tab-btn active" data-view="record">
+    <span class="tab-icon">📝</span><span>記録</span>
+  </button>
+  <button type="button" class="tab-btn" data-view="grass">
+    <span class="tab-icon">🌱</span><span>草</span>
+  </button>
+  <button type="button" class="tab-btn" data-view="week">
+    <span class="tab-icon">🗓️</span><span>週</span>
+  </button>
+  <button type="button" class="tab-btn" data-view="summary">
+    <span class="tab-icon">📊</span><span>集計</span>
+  </button>
+</nav>
+
+<!-- 記録モーダル -->
+<div id="recordModal" class="modal-overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 id="recordModalTitle" class="modal-title"></h2>
+    <div class="field-label">実施者</div>
+    <div class="segmented" id="doneBySegment">
+      <button type="button" class="segment-btn" data-value="a">A</button>
+      <button type="button" class="segment-btn" data-value="b">B</button>
+      <button type="button" class="segment-btn" data-value="both">二人で</button>
+    </div>
+    <div class="field-label">日時</div>
+    <input type="datetime-local" id="doneAtInput" class="datetime-input">
+    <div class="modal-actions">
+      <button type="button" id="deleteLogBtn" class="btn-danger hidden">削除</button>
+      <button type="button" id="cancelRecordBtn" class="btn-ghost">キャンセル</button>
+      <button type="button" id="saveRecordBtn" class="btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 一覧ボトムシート(日/時間帯詳細) -->
+<div id="listSheet" class="sheet-overlay hidden">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <h2 id="listSheetTitle" class="sheet-title"></h2>
+    <div id="listSheetBody" class="sheet-body"></div>
+    <button type="button" id="closeListSheetBtn" class="btn-ghost">閉じる</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
 </html>

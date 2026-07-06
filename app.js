@@ -817,10 +817,17 @@
       var dayLogs = (byDay[key2] || []).slice().sort(function (a, b) {
         return new Date(a.done_at) - new Date(b.done_at);
       });
+      var dayTotals = countPointsTotals(dayLogs);
       html += '<div class="home-day-group">' +
         '<div class="home-day-head">' +
           '<span>' + escapeHtml(formatMonthDayWeek(day)) + '</span>' +
-          '<span>' + countWorkPoints(dayLogs) + 'pt / ' + dayLogs.length + '件</span>' +
+          '<div class="home-day-total">' +
+            '<span>' + countWorkPoints(dayLogs) + 'pt / ' + dayLogs.length + '件</span>' +
+            '<span class="home-day-person-totals">' +
+              '<b style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + dayTotals.a + 'pt</b>' +
+              '<b style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + dayTotals.b + 'pt</b>' +
+            '</span>' +
+          '</div>' +
         '</div>';
       html += dayLogs.length ? '<div class="home-day-logs">' + dayLogs.map(homeDailyLogRowHtml).join('') + '</div>' :
         '<div class="home-day-empty">記録なし</div>';

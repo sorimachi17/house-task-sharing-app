@@ -568,9 +568,25 @@ main {
   font-weight: 900;
 }
 
-.home-day-head span:last-child {
+.home-day-total {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
   color: var(--text-muted);
   font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.home-day-person-totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+.home-day-person-totals b {
+  font-weight: 900;
 }
 
 .home-day-logs {

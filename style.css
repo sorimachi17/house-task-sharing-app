@@ -64,6 +64,8 @@ input {
   justify-content: space-between;
   padding: env(safe-area-inset-top) 16px 0;
   z-index: 20;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .app-title {
@@ -154,6 +156,8 @@ main {
   margin: 0 auto;
   z-index: 15;
   pointer-events: none;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .fab-button {
@@ -192,6 +196,8 @@ main {
   display: flex;
   z-index: 20;
   padding-bottom: env(safe-area-inset-bottom);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .tab-btn {
@@ -583,7 +589,7 @@ main {
   position: fixed;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateZ(0);
   background: rgba(28, 31, 32, 0.94);
   color: #fff;
   padding: 11px 20px;

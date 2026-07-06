@@ -659,6 +659,13 @@
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
+          '<div class="home-insight-title">今週の陣取りマップ</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '<br>面積=pt / 色=担当</div>' +
+        '</div>' +
+        homeTerritoryMapHtml(weekLogs) +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
           '<div class="home-insight-title">最近の記録</div>' +
           '<div class="home-insight-sub">' + escapeHtml(range14Label) + '</div>' +
         '</div>' +
@@ -722,6 +729,52 @@
 
   function homeGrassPointText(points) {
     return points > 0 ? '<span class="home-grass-points">' + points + 'pt</span>' : '';
+  }
+
+  function homeTerritoryMapHtml(logs) {
+    var groups = buildTerritoryGroups(logs);
+    if (!groups.length) return '<div class="empty-state">今週の記録はまだありません</div>';
+
+    var total = groups.reduce(function (sum, group) { return sum + group.points; }, 0);
+    return '<div class="home-territory-map">' + groups.map(function (group) {
+      var span = territorySpanForPoints(group.points);
+      return '<div class="home-territory-tile" style="' +
+        'grid-column:span ' + span.col + ';grid-row:span ' + span.row + ';background:' + dotColorForUser(group.doneBy) + '">' +
+        '<div class="home-territory-name">' + escapeHtml(group.name) + '</div>' +
+        '<div class="home-territory-meta">' + escapeHtml(group.category) + ' ・ ' + escapeHtml(userLabelForLog({ done_by: group.doneBy })) + '</div>' +
+        '<div class="home-territory-bottom"><span>' + group.points + 'pt</span><span>' + group.count + '回</span></div>' +
+      '</div>';
+    }).join('') + '</div>' +
+    '<div class="home-territory-note">今週合計 ' + total + 'pt / タイルが大きいほど量が多いです</div>';
+  }
+
+  function buildTerritoryGroups(logs) {
+    var byKey = {};
+    logs.forEach(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var key = log.chore_id + ':' + log.done_by;
+      if (!byKey[key]) {
+        byKey[key] = {
+          name: chore ? chore.name : '(削除済みの家事)',
+          category: chore ? chore.category : 'その他',
+          doneBy: log.done_by,
+          points: 0,
+          count: 0
+        };
+      }
+      byKey[key].points += pointsForLog(log);
+      byKey[key].count++;
+    });
+    return Object.keys(byKey).map(function (key) { return byKey[key]; })
+      .sort(function (a, b) { return b.points - a.points || b.count - a.count; })
+      .slice(0, 10);
+  }
+
+  function territorySpanForPoints(points) {
+    if (points >= 8) return { col: 4, row: 2 };
+    if (points >= 5) return { col: 3, row: 2 };
+    if (points >= 3) return { col: 2, row: 2 };
+    return { col: 2, row: 1 };
   }
 
   function homeCategoryBarsHtml(logs) {

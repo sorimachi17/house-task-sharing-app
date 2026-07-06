@@ -94,6 +94,14 @@
     return (d.getMonth() + 1) + '月' + d.getDate() + '日(' + wd + ')';
   }
 
+  function formatMonthDay(d) {
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
+  function formatDateRange(start, endExclusive) {
+    return formatMonthDay(start) + '〜' + formatMonthDay(addDays(endExclusive, -1));
+  }
+
   function formatWeekLabel(weekStart) {
     var end = addDays(weekStart, 6);
     return (weekStart.getMonth() + 1) + '/' + weekStart.getDate() + ' – ' + (end.getMonth() + 1) + '/' + end.getDate();
@@ -495,6 +503,19 @@
     return totals;
   }
 
+  function countPointsAndLogsByDay(logs) {
+    var byDay = {};
+    logs.forEach(function (log) {
+      var key = dateKey(new Date(log.done_at));
+      if (!byDay[key]) byDay[key] = { a: 0, b: 0, logs: [] };
+      var pts = pointsForLog(log);
+      byDay[key].logs.push(log);
+      if (log.done_by === 'a' || log.done_by === 'both') byDay[key].a += pts;
+      if (log.done_by === 'b' || log.done_by === 'both') byDay[key].b += pts;
+    });
+    return byDay;
+  }
+
   function renderChoreButtonsInto(containerEl, chores, onPick) {
     containerEl.innerHTML = '';
     if (!chores.length) {
@@ -546,7 +567,8 @@
 
   async function renderScoreCard() {
     var weekStart = startOfWeekMonday(new Date());
-    var res = await fetchLogsRange(weekStart, addDays(weekStart, 7));
+    var weekEnd = addDays(weekStart, 7);
+    var res = await fetchLogsRange(weekStart, weekEnd);
     if (res.error) return;
     var weekLogs = res.data;
     var todayStart = startOfDay(new Date());
@@ -555,6 +577,8 @@
     var weekPts = countPointsTotals(weekLogs);
     var todayPts = countPointsTotals(todayLogs);
     var maxPts = Math.max(weekPts.a, weekPts.b, 1);
+
+    document.querySelector('#scoreCard .score-card-title').textContent = '今週の対決 ' + formatDateRange(weekStart, weekEnd);
 
     document.getElementById('weekBattleBars').innerHTML =
       barRowHtml(state.userNames.a, weekPts.a, maxPts, CONFIG.USERS.a.color, 'pt') +
@@ -585,6 +609,11 @@
 
     var logs14 = res.data;
     var weekStart = startOfWeekMonday(new Date());
+    var weekEnd = addDays(weekStart, 7);
+    var weekRangeLabel = formatDateRange(weekStart, weekEnd);
+    var range14Label = formatDateRange(rangeStart, rangeEnd);
+    var range7Start = addDays(todayStart, -6);
+    var range7Label = formatDateRange(range7Start, rangeEnd);
     var weekLogs = logs14.filter(function (log) { return new Date(log.done_at) >= weekStart; });
     var weekPts = countPointsTotals(weekLogs);
     var totalPts = weekPts.a + weekPts.b;
@@ -595,13 +624,13 @@
       ? '今週はまだ記録なし'
       : (weekPts.a === weekPts.b ? 'ちょうど半分ずつ' : (weekPts.a > weekPts.b ? state.userNames.a : state.userNames.b) + 'が多め');
 
-    var logs7 = logs14.filter(function (log) { return new Date(log.done_at) >= addDays(todayStart, -6); });
+    var logs7 = logs14.filter(function (log) { return new Date(log.done_at) >= range7Start; });
 
     el.innerHTML =
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
           '<div class="home-insight-title">今週の割合</div>' +
-          '<div class="home-insight-sub">' + escapeHtml(leaderText) + '</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '<br>' + escapeHtml(leaderText) + '</div>' +
         '</div>' +
         '<div class="home-split-grid">' +
           '<div class="home-pie" style="--pie-a:' + aDeg + 'deg">' +
@@ -616,14 +645,14 @@
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
           '<div class="home-insight-title">直近14日の草</div>' +
-          '<div class="home-insight-sub">上: ' + escapeHtml(state.userNames.a) + ' / 下: ' + escapeHtml(state.userNames.b) + '</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(range14Label) + '<br>上: ' + escapeHtml(state.userNames.a) + ' / 下: ' + escapeHtml(state.userNames.b) + '</div>' +
         '</div>' +
         '<div class="home-grass-strip">' + homeGrassStripHtml(rangeStart, logs14) + '</div>' +
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
           '<div class="home-insight-title">カテゴリ別</div>' +
-          '<div class="home-insight-sub">直近7日</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(range7Label) + '</div>' +
         '</div>' +
         '<div class="home-category-bars">' + homeCategoryBarsHtml(logs7) + '</div>' +
       '</div>';
@@ -638,32 +667,30 @@
   }
 
   function homeGrassStripHtml(startDate, logs) {
-    var byDay = {};
-    logs.forEach(function (log) {
-      var key = dateKey(new Date(log.done_at));
-      if (!byDay[key]) byDay[key] = { a: 0, b: 0 };
-      if (log.done_by === 'a' || log.done_by === 'both') byDay[key].a++;
-      if (log.done_by === 'b' || log.done_by === 'both') byDay[key].b++;
-    });
+    var byDay = countPointsAndLogsByDay(logs);
 
     var todayKey = dateKey(new Date());
     var html = '';
     for (var i = 0; i < 14; i++) {
       var day = addDays(startDate, i);
       var key2 = dateKey(day);
-      var info = byDay[key2] || { a: 0, b: 0 };
+      var info = byDay[key2] || { a: 0, b: 0, logs: [] };
       var levelA = countLevel(info.a);
       var levelB = countLevel(info.b);
       var label = key2 === todayKey ? '今日' : String(day.getDate());
       html += '<div class="home-grass-day">' +
         '<div class="home-grass-cell" aria-label="' + label + '">' +
-          '<span class="home-grass-half" style="background:' + rgba(CONFIG.USERS.a.color, LEVEL_ALPHA[levelA]) + '"></span>' +
-          '<span class="home-grass-half" style="background:' + rgba(CONFIG.USERS.b.color, LEVEL_ALPHA[levelB]) + '"></span>' +
+          '<span class="home-grass-half" style="background:' + rgba(CONFIG.USERS.a.color, LEVEL_ALPHA[levelA]) + '">' + homeGrassPointText(info.a) + '</span>' +
+          '<span class="home-grass-half" style="background:' + rgba(CONFIG.USERS.b.color, LEVEL_ALPHA[levelB]) + '">' + homeGrassPointText(info.b) + '</span>' +
         '</div>' +
         '<div class="home-grass-label">' + label + '</div>' +
       '</div>';
     }
     return html;
+  }
+
+  function homeGrassPointText(points) {
+    return points > 0 ? '<span class="home-grass-points">' + points + 'pt</span>' : '';
   }
 
   function homeCategoryBarsHtml(logs) {
@@ -929,14 +956,7 @@
     }
     var data = res.data;
 
-    var byDay = {};
-    data.forEach(function (log) {
-      var key = dateKey(new Date(log.done_at));
-      if (!byDay[key]) byDay[key] = { a: 0, b: 0, logs: [] };
-      byDay[key].logs.push(log);
-      if (log.done_by === 'a' || log.done_by === 'both') byDay[key].a++;
-      if (log.done_by === 'b' || log.done_by === 'both') byDay[key].b++;
-    });
+    var byDay = countPointsAndLogsByDay(data);
 
     grid.innerHTML = '';
     var leadingBlank = rangeStart.getDay() === 0 ? 6 : rangeStart.getDay() - 1;
@@ -963,7 +983,7 @@
         var countA = document.createElement('span');
         countA.className = 'grass-cell-count';
         countA.style.color = countTextColor(levelA);
-        countA.textContent = String(info.a);
+        countA.textContent = info.a + 'pt';
         topHalf.appendChild(countA);
       }
 
@@ -974,7 +994,7 @@
         var countB = document.createElement('span');
         countB.className = 'grass-cell-count';
         countB.style.color = countTextColor(levelB);
-        countB.textContent = String(info.b);
+        countB.textContent = info.b + 'pt';
         bottomHalf.appendChild(countB);
       }
 
@@ -991,14 +1011,13 @@
       grid.appendChild(cell);
     }
 
-    var sumA = 0, sumB = 0, sumBoth = 0;
+    var monthPts = countPointsTotals(data);
+    var sumBoth = 0;
     data.forEach(function (log) {
-      if (log.done_by === 'a') sumA++;
-      else if (log.done_by === 'b') sumB++;
-      else { sumA++; sumB++; sumBoth++; }
+      if (log.done_by === 'both') sumBoth += pointsForLog(log);
     });
-    summaryEl.innerHTML = '今月: ' + escapeHtml(state.userNames.a) + ' ' + sumA + '件 / ' +
-      escapeHtml(state.userNames.b) + ' ' + sumB + '件<br>うち二人で ' + sumBoth + '件';
+    summaryEl.innerHTML = '今月: ' + escapeHtml(state.userNames.a) + ' ' + monthPts.a + 'pt / ' +
+      escapeHtml(state.userNames.b) + ' ' + monthPts.b + 'pt<br>うち二人で ' + sumBoth + 'pt';
   }
 
   // ---------- 週タブ ----------

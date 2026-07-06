@@ -14,8 +14,8 @@
   var DEMO_CHORES_KEY = 'kajilog_demo_chores';
   var DEMO_USER_NAMES_KEY = 'kajilog_demo_user_names';
 
-  syncAppViewportHeight();
-  bindAppViewportHeightSync();
+  markStandaloneDisplayMode();
+  bindStandaloneDisplayModeListener();
 
   var DURATION_LABELS = {
     under5: '5分未満',
@@ -166,55 +166,18 @@
 
   document.addEventListener('DOMContentLoaded', init);
 
-  function getViewportHeight() {
-    if (window.visualViewport && window.visualViewport.height) {
-      return window.visualViewport.height;
-    }
-    return window.innerHeight || document.documentElement.clientHeight;
+  function markStandaloneDisplayMode() {
+    var mq = window.matchMedia && window.matchMedia('(display-mode: standalone)');
+    var isStandalone = (window.navigator && window.navigator.standalone === true) || (mq && mq.matches);
+    document.documentElement.classList.toggle('is-standalone', !!isStandalone);
   }
 
-  function syncAppViewportHeight() {
-    document.documentElement.style.setProperty('--app-height', getViewportHeight() + 'px');
-  }
-
-  function bindAppViewportHeightSync() {
-    var rafId = null;
-    var timers = [];
-
-    function scheduleSync() {
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(function () {
-        rafId = null;
-        syncAppViewportHeight();
-      });
-    }
-
-    function syncAfterStandaloneSettles() {
-      timers.forEach(clearTimeout);
-      timers = [0, 80, 250, 600, 1200].map(function (delay) {
-        return setTimeout(function () {
-          syncAppViewportHeight();
-          if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-        }, delay);
-      });
-    }
-
-    window.addEventListener('resize', scheduleSync);
-    window.addEventListener('orientationchange', syncAfterStandaloneSettles);
-    window.addEventListener('pageshow', syncAfterStandaloneSettles);
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) syncAfterStandaloneSettles();
-    });
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', scheduleSync);
-      window.visualViewport.addEventListener('scroll', scheduleSync);
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', syncAfterStandaloneSettles, { once: true });
-    } else {
-      syncAfterStandaloneSettles();
+  function bindStandaloneDisplayModeListener() {
+    var mq = window.matchMedia && window.matchMedia('(display-mode: standalone)');
+    if (mq && mq.addEventListener) {
+      mq.addEventListener('change', markStandaloneDisplayMode);
+    } else if (mq && mq.addListener) {
+      mq.addListener(markStandaloneDisplayMode);
     }
   }
 
@@ -606,6 +569,128 @@
       '<span style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + todayPts.b + 'pt</span>';
   }
 
+  async function renderHomeInsights() {
+    var el = document.getElementById('homeInsights');
+    if (!el) return;
+
+    var todayStart = startOfDay(new Date());
+    var rangeStart = addDays(todayStart, -13);
+    var rangeEnd = addDays(todayStart, 1);
+    var res = await fetchLogsRange(rangeStart, rangeEnd);
+
+    if (res.error) {
+      el.innerHTML = '<div class="home-insight-card"><div class="empty-state">グラフの読み込みに失敗しました</div></div>';
+      return;
+    }
+
+    var logs14 = res.data;
+    var weekStart = startOfWeekMonday(new Date());
+    var weekLogs = logs14.filter(function (log) { return new Date(log.done_at) >= weekStart; });
+    var weekPts = countPointsTotals(weekLogs);
+    var totalPts = weekPts.a + weekPts.b;
+    var aPct = totalPts ? Math.round((weekPts.a / totalPts) * 100) : 0;
+    var bPct = totalPts ? 100 - aPct : 0;
+    var aDeg = totalPts ? Math.round((weekPts.a / totalPts) * 360) : 180;
+    var leaderText = totalPts === 0
+      ? '今週はまだ記録なし'
+      : (weekPts.a === weekPts.b ? 'ちょうど半分ずつ' : (weekPts.a > weekPts.b ? state.userNames.a : state.userNames.b) + 'が多め');
+
+    var logs7 = logs14.filter(function (log) { return new Date(log.done_at) >= addDays(todayStart, -6); });
+
+    el.innerHTML =
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
+          '<div class="home-insight-title">今週の割合</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(leaderText) + '</div>' +
+        '</div>' +
+        '<div class="home-split-grid">' +
+          '<div class="home-pie" style="--pie-a:' + aDeg + 'deg">' +
+            '<div class="home-pie-center">' + totalPts + 'pt<span>合計</span></div>' +
+          '</div>' +
+          '<div class="home-pie-list">' +
+            homePieRowHtml(state.userNames.a, weekPts.a, aPct, CONFIG.USERS.a.color) +
+            homePieRowHtml(state.userNames.b, weekPts.b, bPct, CONFIG.USERS.b.color) +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
+          '<div class="home-insight-title">直近14日の草</div>' +
+          '<div class="home-insight-sub">上: ' + escapeHtml(state.userNames.a) + ' / 下: ' + escapeHtml(state.userNames.b) + '</div>' +
+        '</div>' +
+        '<div class="home-grass-strip">' + homeGrassStripHtml(rangeStart, logs14) + '</div>' +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
+          '<div class="home-insight-title">カテゴリ別</div>' +
+          '<div class="home-insight-sub">直近7日</div>' +
+        '</div>' +
+        '<div class="home-category-bars">' + homeCategoryBarsHtml(logs7) + '</div>' +
+      '</div>';
+  }
+
+  function homePieRowHtml(name, points, pct, color) {
+    return '<div class="home-pie-row">' +
+      '<span class="home-pie-dot" style="background:' + color + '"></span>' +
+      '<span>' + escapeHtml(name) + '</span>' +
+      '<span class="home-pie-muted">' + points + 'pt / ' + pct + '%</span>' +
+    '</div>';
+  }
+
+  function homeGrassStripHtml(startDate, logs) {
+    var byDay = {};
+    logs.forEach(function (log) {
+      var key = dateKey(new Date(log.done_at));
+      if (!byDay[key]) byDay[key] = { a: 0, b: 0 };
+      if (log.done_by === 'a' || log.done_by === 'both') byDay[key].a++;
+      if (log.done_by === 'b' || log.done_by === 'both') byDay[key].b++;
+    });
+
+    var todayKey = dateKey(new Date());
+    var html = '';
+    for (var i = 0; i < 14; i++) {
+      var day = addDays(startDate, i);
+      var key2 = dateKey(day);
+      var info = byDay[key2] || { a: 0, b: 0 };
+      var levelA = countLevel(info.a);
+      var levelB = countLevel(info.b);
+      var label = key2 === todayKey ? '今日' : String(day.getDate());
+      html += '<div class="home-grass-day">' +
+        '<div class="home-grass-cell" aria-label="' + label + '">' +
+          '<span class="home-grass-half" style="background:' + rgba(CONFIG.USERS.a.color, LEVEL_ALPHA[levelA]) + '"></span>' +
+          '<span class="home-grass-half" style="background:' + rgba(CONFIG.USERS.b.color, LEVEL_ALPHA[levelB]) + '"></span>' +
+        '</div>' +
+        '<div class="home-grass-label">' + label + '</div>' +
+      '</div>';
+    }
+    return html;
+  }
+
+  function homeCategoryBarsHtml(logs) {
+    var perCategory = {};
+    logs.forEach(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var category = chore ? chore.category : 'その他';
+      perCategory[category] = (perCategory[category] || 0) + pointsForLog(log);
+    });
+
+    var rows = Object.keys(perCategory).map(function (category) {
+      return { category: category, points: perCategory[category] };
+    }).sort(function (a, b) { return b.points - a.points; }).slice(0, 4);
+
+    if (!rows.length) return '<div class="empty-state">直近7日の記録はまだありません</div>';
+
+    var max = rows.reduce(function (m, row) { return Math.max(m, row.points); }, 1);
+    return rows.map(function (row) {
+      var pct = Math.max(6, Math.round((row.points / max) * 100));
+      return '<div class="home-category-row">' +
+        '<div class="home-category-name">' + escapeHtml(row.category) + '</div>' +
+        '<div class="home-category-track"><div class="home-category-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="home-category-count">' + row.points + 'pt</div>' +
+      '</div>';
+    }).join('');
+  }
+
   async function toggleChoreActive(id, isActive) {
     if (DEMO_MODE) {
       var list = readDemoChores();
@@ -623,6 +708,7 @@
       openRecordModal({ choreId: choreId });
     });
     renderScoreCard();
+    renderHomeInsights();
   }
 
   // ---------- 記録モーダル ----------

@@ -16,6 +16,7 @@
   --shadow-sm: 0 2px 8px rgba(20, 22, 22, 0.06);
   --shadow-md: 0 6px 20px rgba(20, 22, 22, 0.10);
   --shadow-lg: 0 -12px 36px rgba(20, 22, 22, 0.16);
+  --app-height: 100dvh;
 }
 
 * { box-sizing: border-box; }
@@ -33,6 +34,13 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: var(--app-height);
+}
+
 button {
   font-family: inherit;
   appearance: none;
@@ -48,7 +56,7 @@ input {
 /* ---------- Layout ---------- */
 
 .app-header {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -138,7 +146,7 @@ input {
 }
 
 main {
-  position: fixed;
+  position: absolute;
   inset: 0;
   max-width: 480px;
   margin: 0 auto;
@@ -148,7 +156,7 @@ main {
 }
 
 .fab-wrap {
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
@@ -181,7 +189,7 @@ main {
 }
 
 .tab-bar {
-  position: fixed;
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;

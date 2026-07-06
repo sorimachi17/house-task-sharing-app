@@ -14,6 +14,9 @@
   var DEMO_CHORES_KEY = 'kajilog_demo_chores';
   var DEMO_USER_NAMES_KEY = 'kajilog_demo_user_names';
 
+  syncAppViewportHeight();
+  bindAppViewportHeightSync();
+
   var DURATION_LABELS = {
     under5: '5分未満',
     '5to10': '5〜10分',
@@ -162,6 +165,58 @@
   // ---------- 初期化 ----------
 
   document.addEventListener('DOMContentLoaded', init);
+
+  function getViewportHeight() {
+    if (window.visualViewport && window.visualViewport.height) {
+      return window.visualViewport.height;
+    }
+    return window.innerHeight || document.documentElement.clientHeight;
+  }
+
+  function syncAppViewportHeight() {
+    document.documentElement.style.setProperty('--app-height', getViewportHeight() + 'px');
+  }
+
+  function bindAppViewportHeightSync() {
+    var rafId = null;
+    var timers = [];
+
+    function scheduleSync() {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(function () {
+        rafId = null;
+        syncAppViewportHeight();
+      });
+    }
+
+    function syncAfterStandaloneSettles() {
+      timers.forEach(clearTimeout);
+      timers = [0, 80, 250, 600, 1200].map(function (delay) {
+        return setTimeout(function () {
+          syncAppViewportHeight();
+          if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+        }, delay);
+      });
+    }
+
+    window.addEventListener('resize', scheduleSync);
+    window.addEventListener('orientationchange', syncAfterStandaloneSettles);
+    window.addEventListener('pageshow', syncAfterStandaloneSettles);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) syncAfterStandaloneSettles();
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleSync);
+      window.visualViewport.addEventListener('scroll', scheduleSync);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', syncAfterStandaloneSettles, { once: true });
+    } else {
+      syncAfterStandaloneSettles();
+    }
+  }
 
   async function init() {
     bindBlurOnTapFix();

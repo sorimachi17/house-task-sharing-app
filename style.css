@@ -413,59 +413,187 @@ main {
   border: 1px solid var(--border);
 }
 
-.home-week-illo {
+.home-week-character {
+  --char-bg: rgba(0, 166, 184, 0.16);
+  --char-main: var(--color-a);
+  --char-accent: var(--color-b);
   position: relative;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(0, 166, 184, 0.2), rgba(88, 166, 255, 0.24));
+  width: 46px;
+  height: 46px;
+  border-radius: 17px;
+  background: linear-gradient(135deg, var(--char-bg), rgba(255, 255, 255, 0.74));
   overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0, 166, 184, 0.1);
 }
 
-.home-week-illo::before {
+.home-week-face {
+  position: absolute;
+  left: 11px;
+  bottom: 9px;
+  width: 24px;
+  height: 21px;
+  border-radius: 11px 11px 9px 9px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px rgba(0, 166, 184, 0.16), 0 5px 10px rgba(0, 0, 0, 0.06);
+}
+
+.home-week-face::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 8px 0 0 var(--text);
+}
+
+.home-week-face::after {
   content: "";
   position: absolute;
   left: 10px;
-  bottom: 8px;
-  width: 22px;
-  height: 16px;
-  border-radius: 7px 7px 9px 9px;
-  background: #fff;
-  box-shadow: inset 0 0 0 2px rgba(0, 166, 184, 0.24);
+  top: 14px;
+  width: 6px;
+  height: 3px;
+  border-bottom: 2px solid rgba(34, 34, 34, 0.55);
+  border-radius: 50%;
 }
 
-.home-week-illo::after {
-  content: "";
+.home-week-prop {
   position: absolute;
-  left: 15px;
-  bottom: 23px;
+  right: 7px;
+  top: 7px;
   width: 12px;
-  height: 7px;
-  border: 2px solid rgba(0, 166, 184, 0.5);
-  border-bottom: 0;
-  border-radius: 9px 9px 0 0;
+  height: 12px;
+  border-radius: 5px;
+  background: var(--char-accent);
+  box-shadow: 0 7px 0 -3px rgba(255, 255, 255, 0.75);
 }
 
-.home-week-illo span,
-.home-week-illo i {
+.home-week-spark {
   position: absolute;
   display: block;
   border-radius: 50%;
-  background: var(--color-b);
+  background: var(--char-main);
 }
 
-.home-week-illo span {
-  right: 8px;
-  top: 8px;
-  width: 7px;
-  height: 7px;
-}
-
-.home-week-illo i {
+.home-week-spark-a {
   left: 8px;
   top: 12px;
   width: 5px;
   height: 5px;
+}
+
+.home-week-spark-b {
+  right: 9px;
+  bottom: 9px;
+  width: 4px;
+  height: 4px;
+  background: var(--char-accent);
+}
+
+.home-week-character--bubble {
+  --char-bg: rgba(88, 166, 255, 0.2);
+  --char-main: #58A6FF;
+  --char-accent: #00C2D1;
+}
+
+.home-week-character--bubble .home-week-prop {
+  border-radius: 50%;
+  box-shadow: -6px 7px 0 -3px rgba(88, 166, 255, 0.55);
+}
+
+.home-week-character--calendar {
+  --char-bg: rgba(0, 166, 184, 0.18);
+  --char-main: #00A6B8;
+  --char-accent: #58A6FF;
+}
+
+.home-week-character--calendar .home-week-prop {
+  width: 14px;
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(var(--char-accent) 0 35%, #fff 35%);
+  box-shadow: inset 0 0 0 1px rgba(0, 166, 184, 0.18);
+}
+
+.home-week-character--sparkle {
+  --char-bg: rgba(88, 166, 255, 0.18);
+  --char-main: #58A6FF;
+  --char-accent: #7DD3FC;
+}
+
+.home-week-character--sparkle .home-week-prop {
+  transform: rotate(45deg);
+  border-radius: 3px;
+}
+
+.home-week-character--apron {
+  --char-bg: rgba(0, 194, 209, 0.16);
+  --char-main: #00A6B8;
+  --char-accent: #8BE3EA;
+}
+
+.home-week-character--apron .home-week-face {
+  border-radius: 14px 14px 10px 10px;
+}
+
+.home-week-character--leaf {
+  --char-bg: rgba(60, 190, 170, 0.16);
+  --char-main: #16A6A1;
+  --char-accent: #6ED7C5;
+}
+
+.home-week-character--leaf .home-week-prop {
+  border-radius: 10px 2px 10px 2px;
+  transform: rotate(-20deg);
+}
+
+.home-week-character--home {
+  --char-bg: rgba(88, 166, 255, 0.18);
+  --char-main: #377BD8;
+  --char-accent: #00A6B8;
+}
+
+.home-week-character--home .home-week-prop {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+}
+
+.home-week-character--home .home-week-prop::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -5px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid var(--char-accent);
+}
+
+.home-week-character--brush {
+  --char-bg: rgba(0, 166, 184, 0.16);
+  --char-main: #00A6B8;
+  --char-accent: #58A6FF;
+}
+
+.home-week-character--brush .home-week-prop {
+  width: 5px;
+  height: 17px;
+  border-radius: 5px;
+  transform: rotate(28deg);
+}
+
+.home-week-character--brush .home-week-prop::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  bottom: -3px;
+  width: 11px;
+  height: 5px;
+  border-radius: 5px;
+  background: var(--char-main);
 }
 
 .home-week-nudge-text {

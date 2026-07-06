@@ -722,15 +722,85 @@
   }
 
   function homeWeekNudgeHtml(totalPts, weekPts) {
-    var title = totalPts === 0 ? '今週はここから' : 'いい感じに積み上がってる';
-    var body = totalPts === 0
-      ? '+ 記録から今日の家事を入れていこう'
-      : (weekPts.a === weekPts.b ? '二人とも同じくらい動けてる週です' : '多い少ないより、何をしたかが見えてきたね');
-
+    var pick = pickHomeNudge(totalPts, weekPts);
     return '<div class="home-week-nudge">' +
-      '<div class="home-week-illo"><span></span><i></i></div>' +
-      '<div class="home-week-nudge-text"><b>' + escapeHtml(title) + '</b><span>' + escapeHtml(body) + '</span></div>' +
+      '<div class="home-week-character home-week-character--' + pick.character + '">' +
+        '<span class="home-week-face"></span><span class="home-week-prop"></span>' +
+        '<span class="home-week-spark home-week-spark-a"></span><span class="home-week-spark home-week-spark-b"></span>' +
+      '</div>' +
+      '<div class="home-week-nudge-text"><b>' + escapeHtml(pick.title) + '</b><span>' + escapeHtml(pick.body) + '</span></div>' +
     '</div>';
+  }
+
+  function pickHomeNudge(totalPts, weekPts) {
+    var characters = ['tidy', 'bubble', 'calendar', 'sparkle', 'apron', 'leaf', 'home', 'brush'];
+    var titles = [
+      '今日の家事ログ、いい表情',
+      'ちょっとずつ整ってる',
+      '暮らしの足あと発見',
+      '家の中、ちゃんと進んでる',
+      '小さな実績が集まってる',
+      '見える化、効いてきた',
+      '今日も生活が回ってる',
+      'いいリズムができてきた',
+      'やったこと、ちゃんと残ってる',
+      '家事の地図が育ってる',
+      '今週の暮らしメモ',
+      '積み上げ、きれいに見えてる'
+    ];
+    var bodies = [
+      '多い少ないより、何をしたかが見えてきたね',
+      'あとで見返したときに、ちゃんと頑張りが残るよ',
+      '小さい家事も並べると、けっこう大きい',
+      '記録があると、気づかない働きも見落としにくい',
+      '今日はここまで見えれば十分いい感じ',
+      '一つずつ片づいているのが分かるね',
+      '家の中の動きが、ちゃんと形になってる',
+      '誰が何をしたかが見えると、気持ちも軽くなる',
+      '今週の流れが少しずつ読めてきた',
+      '見える化すると、家事の偏りもやさしく見直せる',
+      'やったことが残るだけで、ちょっと報われる',
+      '今日の一件も、ちゃんと暮らしを支えてる',
+      '空白の日があっても大丈夫、また足せばいい',
+      '家事は地味だけど、こうして見るとちゃんと成果',
+      '二人分の動きが一枚にまとまってきた',
+      '点数よりも、続いていることがもう強い',
+      '今週の家事、なかなかいい景色になってる',
+      'ちょっとした補充も掃除も、全部ちゃんと仕事',
+      '無理なく続く形がいちばん強い',
+      '今日はどのタイルが育つか楽しみ',
+      '暮らしのメンテナンス、静かに前進中',
+      '見えにくい家事が、ちゃんと見える場所に来た',
+      'この調子で、気づいたときにぽんと記録しよう',
+      '家事の量だけじゃなく、中身も見えてきた',
+      'いい感じ。次は何を記録する？'
+    ];
+    var seed = dateKey(new Date()) + ':' + totalPts + ':' + weekPts.a + ':' + weekPts.b + ':' + nextHomeNudgeCount();
+    var h = hashText(seed);
+    return {
+      character: characters[h % characters.length],
+      title: titles[h % titles.length],
+      body: bodies[Math.floor(h / titles.length) % bodies.length]
+    };
+  }
+
+  function nextHomeNudgeCount() {
+    try {
+      var key = 'kajilog_home_nudge_count_' + dateKey(new Date());
+      var count = Number(localStorage.getItem(key) || '0') + 1;
+      localStorage.setItem(key, String(count));
+      return count;
+    } catch (e) {
+      return Math.floor(Math.random() * 1000);
+    }
+  }
+
+  function hashText(text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) {
+      h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
   }
 
   function homeGrassStripHtml(startDate, logs) {

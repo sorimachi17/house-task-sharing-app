@@ -401,6 +401,91 @@ main {
   font-weight: 700;
 }
 
+.home-week-nudge {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.home-week-illo {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(0, 166, 184, 0.2), rgba(88, 166, 255, 0.24));
+  overflow: hidden;
+}
+
+.home-week-illo::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  width: 22px;
+  height: 16px;
+  border-radius: 7px 7px 9px 9px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px rgba(0, 166, 184, 0.24);
+}
+
+.home-week-illo::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  bottom: 23px;
+  width: 12px;
+  height: 7px;
+  border: 2px solid rgba(0, 166, 184, 0.5);
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+}
+
+.home-week-illo span,
+.home-week-illo i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: var(--color-b);
+}
+
+.home-week-illo span {
+  right: 8px;
+  top: 8px;
+  width: 7px;
+  height: 7px;
+}
+
+.home-week-illo i {
+  left: 8px;
+  top: 12px;
+  width: 5px;
+  height: 5px;
+}
+
+.home-week-nudge-text {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.home-week-nudge-text b {
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.home-week-nudge-text span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
 .home-grass-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -566,6 +651,16 @@ main {
   color: var(--text);
   font-size: 12px;
   font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+
+.home-day-head::-webkit-details-marker {
+  display: none;
+}
+
+.home-day-group[open] .home-day-head {
+  border-bottom: 1px solid var(--border);
 }
 
 .home-day-total {
@@ -611,6 +706,10 @@ main {
 
 .home-day-log-row:active {
   transform: scale(0.99);
+}
+
+.home-day-log-row:first-child {
+  border-top: none;
 }
 
 .home-day-log-time {

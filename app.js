@@ -508,6 +508,22 @@
     return totals;
   }
 
+  function countUserStats(logs) {
+    var totals = { a: { points: 0, count: 0 }, b: { points: 0, count: 0 } };
+    logs.forEach(function (log) {
+      var pts = pointsForLog(log);
+      if (log.done_by === 'a' || log.done_by === 'both') {
+        totals.a.points += pts;
+        totals.a.count++;
+      }
+      if (log.done_by === 'b' || log.done_by === 'both') {
+        totals.b.points += pts;
+        totals.b.count++;
+      }
+    });
+    return totals;
+  }
+
   function countPointsAndLogsByDay(logs) {
     var byDay = {};
     logs.forEach(function (log) {
@@ -578,7 +594,7 @@
     document.getElementById('fabSheet').classList.add('hidden');
   }
 
-  // ---------- ホームの実績カード(今週の対決・今日のポイント) ----------
+  // ---------- ホームの実績カード(今週の実績・今日のポイント) ----------
 
   async function renderScoreCard() {
     var weekStart = startOfWeekMonday(new Date());
@@ -593,15 +609,15 @@
     var todayPts = countPointsTotals(todayLogs);
     var maxPts = Math.max(weekPts.a, weekPts.b, 1);
 
-    document.querySelector('#scoreCard .score-card-title').textContent = '今週の対決 ' + formatDateRange(weekStart, weekEnd);
+    document.querySelector('#scoreCard .score-card-title').textContent = '今週の実績 ' + formatDateRange(weekStart, weekEnd);
 
     document.getElementById('weekBattleBars').innerHTML =
       barRowHtml(state.userNames.a, weekPts.a, maxPts, CONFIG.USERS.a.color, 'pt') +
       barRowHtml(state.userNames.b, weekPts.b, maxPts, CONFIG.USERS.b.color, 'pt');
 
     document.getElementById('scoreLeaderText').textContent = weekPts.a === weekPts.b
-      ? '同点で並走中'
-      : (weekPts.a > weekPts.b ? state.userNames.a : state.userNames.b) + ' が ' + Math.abs(weekPts.a - weekPts.b) + 'pt リード';
+      ? '同じくらいのペース'
+      : (weekPts.a > weekPts.b ? state.userNames.a : state.userNames.b) + ' が +' + Math.abs(weekPts.a - weekPts.b) + 'pt 多め';
 
     document.getElementById('todayPointsText').innerHTML =
       '<span style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + todayPts.a + 'pt</span>' +
@@ -656,6 +672,7 @@
             homePieRowHtml(state.userNames.b, weekPts.b, bPct, CONFIG.USERS.b.color) +
           '</div>' +
         '</div>' +
+        homeWeekNudgeHtml(totalPts, weekPts) +
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
@@ -701,6 +718,18 @@
       '<span class="home-pie-dot" style="background:' + color + '"></span>' +
       '<span>' + escapeHtml(name) + '</span>' +
       '<span class="home-pie-muted">' + points + 'pt / ' + pct + '%</span>' +
+    '</div>';
+  }
+
+  function homeWeekNudgeHtml(totalPts, weekPts) {
+    var title = totalPts === 0 ? '今週はここから' : 'いい感じに積み上がってる';
+    var body = totalPts === 0
+      ? '+ 記録から今日の家事を入れていこう'
+      : (weekPts.a === weekPts.b ? '二人とも同じくらい動けてる週です' : '多い少ないより、何をしたかが見えてきたね');
+
+    return '<div class="home-week-nudge">' +
+      '<div class="home-week-illo"><span></span><i></i></div>' +
+      '<div class="home-week-nudge-text"><b>' + escapeHtml(title) + '</b><span>' + escapeHtml(body) + '</span></div>' +
     '</div>';
   }
 
@@ -817,21 +846,20 @@
       var dayLogs = (byDay[key2] || []).slice().sort(function (a, b) {
         return new Date(a.done_at) - new Date(b.done_at);
       });
-      var dayTotals = countPointsTotals(dayLogs);
-      html += '<div class="home-day-group">' +
-        '<div class="home-day-head">' +
+      var dayTotals = countUserStats(dayLogs);
+      html += '<details class="home-day-group">' +
+        '<summary class="home-day-head">' +
           '<span>' + escapeHtml(formatMonthDayWeek(day)) + '</span>' +
           '<div class="home-day-total">' +
-            '<span>' + countWorkPoints(dayLogs) + 'pt / ' + dayLogs.length + '件</span>' +
             '<span class="home-day-person-totals">' +
-              '<b style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + dayTotals.a + 'pt</b>' +
-              '<b style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + dayTotals.b + 'pt</b>' +
+              '<b style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + dayTotals.a.points + 'pt/' + dayTotals.a.count + '件</b>' +
+              '<b style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + dayTotals.b.points + 'pt/' + dayTotals.b.count + '件</b>' +
             '</span>' +
           '</div>' +
-        '</div>';
+        '</summary>';
       html += dayLogs.length ? '<div class="home-day-logs">' + dayLogs.map(homeDailyLogRowHtml).join('') + '</div>' :
         '<div class="home-day-empty">記録なし</div>';
-      html += '</div>';
+      html += '</details>';
     }
     return html + '</div>';
   }
@@ -930,9 +958,6 @@
   // ---------- 記録タブ ----------
 
   function renderRecordView() {
-    renderChoreButtonsInto(document.getElementById('choreList'), state.chores, function (choreId) {
-      openRecordModal({ choreId: choreId });
-    });
     renderScoreCard();
     renderHomeInsights();
   }

@@ -516,6 +516,21 @@
     return byDay;
   }
 
+  function countWorkPoints(logs) {
+    return logs.reduce(function (sum, log) { return sum + pointsForLog(log); }, 0);
+  }
+
+  function userLabelForLog(log) {
+    if (log.done_by === 'a') return state.userNames.a;
+    if (log.done_by === 'b') return state.userNames.b;
+    return '二人で';
+  }
+
+  function formatLogShortDateTime(log) {
+    var d = new Date(log.done_at);
+    return formatMonthDay(d) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
   function renderChoreButtonsInto(containerEl, chores, onPick) {
     containerEl.innerHTML = '';
     if (!chores.length) {
@@ -644,6 +659,13 @@
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
+          '<div class="home-insight-title">最近の記録</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(range14Label) + '</div>' +
+        '</div>' +
+        '<div class="home-log-list">' + homeRecentLogsHtml(logs14) + '</div>' +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
           '<div class="home-insight-title">直近14日の草</div>' +
           '<div class="home-insight-sub">' + escapeHtml(range14Label) + '<br>上: ' + escapeHtml(state.userNames.a) + ' / 下: ' + escapeHtml(state.userNames.b) + '</div>' +
         '</div>' +
@@ -655,7 +677,16 @@
           '<div class="home-insight-sub">' + escapeHtml(range7Label) + '</div>' +
         '</div>' +
         '<div class="home-category-bars">' + homeCategoryBarsHtml(logs7) + '</div>' +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
+          '<div class="home-insight-title">分析メモ</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(range7Label) + '</div>' +
+        '</div>' +
+        homeAnalysisHtml(logs7) +
       '</div>';
+
+    bindHomeLogRows(logs14);
   }
 
   function homePieRowHtml(name, points, pct, color) {
@@ -716,6 +747,94 @@
         '<div class="home-category-count">' + row.points + 'pt</div>' +
       '</div>';
     }).join('');
+  }
+
+  function homeRecentLogsHtml(logs) {
+    var recent = logs.slice().sort(function (a, b) {
+      return new Date(b.done_at) - new Date(a.done_at);
+    }).slice(0, 6);
+
+    if (!recent.length) return '<div class="empty-state">直近14日の記録はまだありません</div>';
+
+    return recent.map(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var choreName = chore ? chore.name : '(削除済みの家事)';
+      var category = chore ? chore.category : 'その他';
+      return '<button type="button" class="home-log-row" data-home-log-id="' + escapeHtml(log.id) + '">' +
+        '<span class="home-log-dot" style="background:' + dotColorForUser(log.done_by) + '"></span>' +
+        '<span class="home-log-main">' +
+          '<span class="home-log-name">' + escapeHtml(choreName) + '</span>' +
+          '<span class="home-log-meta">' + escapeHtml(formatLogShortDateTime(log)) + ' ・ ' + escapeHtml(userLabelForLog(log)) + ' ・ ' + escapeHtml(category) + '</span>' +
+        '</span>' +
+        '<span class="home-log-points">' + pointsForLog(log) + 'pt</span>' +
+      '</button>';
+    }).join('') + (logs.length > 6 ? '<div class="home-log-more">ほか ' + (logs.length - 6) + '件</div>' : '');
+  }
+
+  function bindHomeLogRows(logs) {
+    var byId = {};
+    logs.forEach(function (log) { byId[log.id] = log; });
+    document.querySelectorAll('.home-log-row').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var log = byId[row.dataset.homeLogId];
+        if (log) openRecordModal({ log: log });
+      });
+    });
+  }
+
+  function homeAnalysisHtml(logs) {
+    if (!logs.length) return '<div class="empty-state">直近7日の分析は、記録が増えると表示されます</div>';
+
+    var totalWork = countWorkPoints(logs);
+    var bothLogs = logs.filter(function (log) { return log.done_by === 'both'; });
+    var bothPoints = countWorkPoints(bothLogs);
+    var topChore = getTopChoreAnalysis(logs);
+    var topDay = getTopDayAnalysis(logs);
+    var totals = countPointsTotals(logs);
+    var balance = totals.a === totals.b
+      ? '同じくらい'
+      : (totals.a > totals.b ? state.userNames.a : state.userNames.b) + ' +' + Math.abs(totals.a - totals.b) + 'pt';
+
+    return '<div class="home-metric-grid">' +
+      homeMetricHtml('記録数', logs.length + '件') +
+      homeMetricHtml('合計', totalWork + 'pt') +
+      homeMetricHtml('二人で', bothPoints + 'pt') +
+      homeMetricHtml('最多家事', topChore ? topChore.name + ' ' + topChore.count + '回' : '-') +
+      homeMetricHtml('多い日', topDay ? topDay.label + ' ' + topDay.points + 'pt' : '-') +
+      homeMetricHtml('バランス', balance) +
+    '</div>';
+  }
+
+  function homeMetricHtml(label, value) {
+    return '<div class="home-metric">' +
+      '<div class="home-metric-label">' + escapeHtml(label) + '</div>' +
+      '<div class="home-metric-value">' + escapeHtml(value) + '</div>' +
+    '</div>';
+  }
+
+  function getTopChoreAnalysis(logs) {
+    var byChore = {};
+    logs.forEach(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var name = chore ? chore.name : '(削除済みの家事)';
+      if (!byChore[log.chore_id]) byChore[log.chore_id] = { name: name, count: 0, points: 0 };
+      byChore[log.chore_id].count++;
+      byChore[log.chore_id].points += pointsForLog(log);
+    });
+    return Object.keys(byChore).map(function (id) { return byChore[id]; })
+      .sort(function (a, b) { return b.count - a.count || b.points - a.points; })[0] || null;
+  }
+
+  function getTopDayAnalysis(logs) {
+    var byDay = {};
+    logs.forEach(function (log) {
+      var key = dateKey(new Date(log.done_at));
+      if (!byDay[key]) byDay[key] = { date: startOfDay(new Date(log.done_at)), points: 0 };
+      byDay[key].points += pointsForLog(log);
+    });
+    return Object.keys(byDay).map(function (key) {
+      return { label: formatMonthDay(byDay[key].date), points: byDay[key].points };
+    }).sort(function (a, b) { return b.points - a.points; })[0] || null;
   }
 
   async function toggleChoreActive(id, isActive) {

@@ -24,6 +24,7 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  overflow: hidden;
   background: var(--bg-soft);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
@@ -135,10 +136,13 @@ input {
 }
 
 main {
+  position: fixed;
+  inset: 0;
   max-width: 480px;
   margin: 0 auto;
   padding: calc(var(--header-h) + env(safe-area-inset-top) + 16px) 14px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px);
-  min-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .fab-wrap {

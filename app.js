@@ -102,6 +102,11 @@
     return formatMonthDay(start) + '〜' + formatMonthDay(addDays(endExclusive, -1));
   }
 
+  function formatMonthDayWeek(d) {
+    var wd = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    return formatMonthDay(d) + '(' + wd + ')';
+  }
+
   function formatWeekLabel(weekStart) {
     var end = addDays(weekStart, 6);
     return (weekStart.getMonth() + 1) + '/' + weekStart.getDate() + ' – ' + (end.getMonth() + 1) + '/' + end.getDate();
@@ -526,11 +531,6 @@
     return '二人で';
   }
 
-  function formatLogShortDateTime(log) {
-    var d = new Date(log.done_at);
-    return formatMonthDay(d) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-  }
-
   function renderChoreButtonsInto(containerEl, chores, onPick) {
     containerEl.innerHTML = '';
     if (!chores.length) {
@@ -666,10 +666,10 @@
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
-          '<div class="home-insight-title">最近の記録</div>' +
-          '<div class="home-insight-sub">' + escapeHtml(range14Label) + '</div>' +
+          '<div class="home-insight-title">今週の日別一覧</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
         '</div>' +
-        '<div class="home-log-list">' + homeRecentLogsHtml(logs14) + '</div>' +
+        homeDailyLogsHtml(weekStart, weekLogs) +
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
@@ -693,7 +693,7 @@
         homeAnalysisHtml(logs7) +
       '</div>';
 
-    bindHomeLogRows(logs14);
+    bindHomeDailyLogRows(weekLogs);
   }
 
   function homePieRowHtml(name, points, pct, color) {
@@ -802,32 +802,52 @@
     }).join('');
   }
 
-  function homeRecentLogsHtml(logs) {
-    var recent = logs.slice().sort(function (a, b) {
-      return new Date(b.done_at) - new Date(a.done_at);
-    }).slice(0, 6);
+  function homeDailyLogsHtml(weekStart, logs) {
+    var byDay = {};
+    logs.forEach(function (log) {
+      var key = dateKey(new Date(log.done_at));
+      if (!byDay[key]) byDay[key] = [];
+      byDay[key].push(log);
+    });
 
-    if (!recent.length) return '<div class="empty-state">直近14日の記録はまだありません</div>';
-
-    return recent.map(function (log) {
-      var chore = state.choresById[log.chore_id];
-      var choreName = chore ? chore.name : '(削除済みの家事)';
-      var category = chore ? chore.category : 'その他';
-      return '<button type="button" class="home-log-row" data-home-log-id="' + escapeHtml(log.id) + '">' +
-        '<span class="home-log-dot" style="background:' + dotColorForUser(log.done_by) + '"></span>' +
-        '<span class="home-log-main">' +
-          '<span class="home-log-name">' + escapeHtml(choreName) + '</span>' +
-          '<span class="home-log-meta">' + escapeHtml(formatLogShortDateTime(log)) + ' ・ ' + escapeHtml(userLabelForLog(log)) + ' ・ ' + escapeHtml(category) + '</span>' +
-        '</span>' +
-        '<span class="home-log-points">' + pointsForLog(log) + 'pt</span>' +
-      '</button>';
-    }).join('') + (logs.length > 6 ? '<div class="home-log-more">ほか ' + (logs.length - 6) + '件</div>' : '');
+    var html = '<div class="home-day-list">';
+    for (var i = 0; i < 7; i++) {
+      var day = addDays(weekStart, i);
+      var key2 = dateKey(day);
+      var dayLogs = (byDay[key2] || []).slice().sort(function (a, b) {
+        return new Date(a.done_at) - new Date(b.done_at);
+      });
+      html += '<div class="home-day-group">' +
+        '<div class="home-day-head">' +
+          '<span>' + escapeHtml(formatMonthDayWeek(day)) + '</span>' +
+          '<span>' + countWorkPoints(dayLogs) + 'pt / ' + dayLogs.length + '件</span>' +
+        '</div>';
+      html += dayLogs.length ? '<div class="home-day-logs">' + dayLogs.map(homeDailyLogRowHtml).join('') + '</div>' :
+        '<div class="home-day-empty">記録なし</div>';
+      html += '</div>';
+    }
+    return html + '</div>';
   }
 
-  function bindHomeLogRows(logs) {
+  function homeDailyLogRowHtml(log) {
+    var chore = state.choresById[log.chore_id];
+    var choreName = chore ? chore.name : '(削除済みの家事)';
+    var t = new Date(log.done_at);
+    return '<button type="button" class="home-day-log-row" data-home-log-id="' + escapeHtml(log.id) + '">' +
+      '<span class="home-day-log-time">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + '</span>' +
+      '<span class="home-day-log-dot" style="background:' + dotColorForUser(log.done_by) + '"></span>' +
+      '<span class="home-day-log-main">' +
+        '<span class="home-day-log-user">' + escapeHtml(userLabelForLog(log)) + '</span>' +
+        '<span class="home-day-log-name">' + escapeHtml(choreName) + '</span>' +
+      '</span>' +
+      '<span class="home-day-log-points">' + pointsForLog(log) + 'pt</span>' +
+    '</button>';
+  }
+
+  function bindHomeDailyLogRows(logs) {
     var byId = {};
     logs.forEach(function (log) { byId[log.id] = log; });
-    document.querySelectorAll('.home-log-row').forEach(function (row) {
+    document.querySelectorAll('.home-day-log-row').forEach(function (row) {
       row.addEventListener('click', function () {
         var log = byId[row.dataset.homeLogId];
         if (log) openRecordModal({ log: log });

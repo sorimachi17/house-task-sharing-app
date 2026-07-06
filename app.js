@@ -22,12 +22,12 @@
   };
 
   var DEMO_CHORE_SEED = [
-    ['掃除機', '掃除'], ['埃取り', '掃除'], ['散らかり片づける', '掃除'], ['トイレ掃除', '掃除'], ['洗面所掃除', '掃除'],
-    ['洗濯機回す', '洗濯'], ['洗濯干す', '洗濯'], ['洗濯畳む', '洗濯'], ['シーツ洗い', '洗濯'],
-    ['お風呂掃除(湯舟)', '風呂'], ['お風呂掃除(髪の毛取り)', '風呂'], ['お風呂掃除(洗い場)', '風呂'],
-    ['お皿洗い(一人分)', 'キッチン'], ['お皿洗い(二人分)', 'キッチン'], ['キッチンシンク', 'キッチン'], ['コンロ', 'キッチン'],
-    ['ゴミ出し(燃えるゴミ)', 'ゴミ出し'], ['ゴミ出し(ペットボトル)', 'ゴミ出し'], ['ゴミ出し(段ボール)', 'ゴミ出し'], ['ゴミ出し(缶)', 'ゴミ出し'],
-    ['シャンプー・ソープ補充', '買い物・補充'], ['R1買う', '買い物・補充'], ['水買う', '買い物・補充'], ['水やり', 'その他']
+    ['掃除機', '掃除', 2], ['埃取り', '掃除', 1], ['散らかり片づける', '掃除', 1], ['トイレ掃除', '掃除', 2], ['洗面所掃除', '掃除', 1],
+    ['洗濯機回す', '洗濯', 1], ['洗濯干す', '洗濯', 2], ['洗濯畳む', '洗濯', 2], ['シーツ洗い', '洗濯', 3],
+    ['お風呂掃除(湯舟)', '風呂', 2], ['お風呂掃除(髪の毛取り)', '風呂', 1], ['お風呂掃除(洗い場)', '風呂', 2],
+    ['お皿洗い(一人分)', 'キッチン', 1], ['お皿洗い(二人分)', 'キッチン', 2], ['キッチンシンク', 'キッチン', 1], ['コンロ', 'キッチン', 2],
+    ['ゴミ出し(燃えるゴミ)', 'ゴミ出し', 1], ['ゴミ出し(ペットボトル)', 'ゴミ出し', 1], ['ゴミ出し(段ボール)', 'ゴミ出し', 1], ['ゴミ出し(缶)', 'ゴミ出し', 1],
+    ['シャンプー・ソープ補充', '買い物・補充', 1], ['R1買う', '買い物・補充', 1], ['水買う', '買い物・補充', 1], ['水やり', 'その他', 1]
   ];
 
   var state = {
@@ -173,6 +173,7 @@
     bindSummaryNav();
     bindSettingsEvents();
     bindChoreModalEvents();
+    bindFabEvents();
 
     state.userNames = await loadUserNames();
     applyUserTheme();
@@ -283,7 +284,7 @@
       if (saved && saved.length) return saved;
     } catch (e) { /* ignore, fall through to seed */ }
     var seeded = DEMO_CHORE_SEED.map(function (item, index) {
-      return { id: 'demo-' + (index + 1), name: item[0], category: item[1], duration_bucket: 'under5', sort_order: index + 1, is_active: true };
+      return { id: 'demo-' + (index + 1), name: item[0], category: item[1], points: item[2], duration_bucket: 'under5', sort_order: index + 1, is_active: true };
     });
     writeDemoChores(seeded);
     return seeded;
@@ -420,6 +421,7 @@
           name: chore.name,
           category: chore.category,
           duration_bucket: chore.duration_bucket,
+          points: chore.points,
           sort_order: maxOrder + 1,
           is_active: true
         });
@@ -431,7 +433,8 @@
       return await sb.from('chores').update({
         name: chore.name,
         category: chore.category,
-        duration_bucket: chore.duration_bucket
+        duration_bucket: chore.duration_bucket,
+        points: chore.points
       }).eq('id', chore.id);
     }
     var maxOrder2 = state.allChores.reduce(function (m, c) { return Math.max(m, c.sort_order || 0); }, 0);
@@ -439,9 +442,103 @@
       name: chore.name,
       category: chore.category,
       duration_bucket: chore.duration_bucket,
+      points: chore.points,
       sort_order: maxOrder2 + 1,
       is_active: true
     });
+  }
+
+  function pointsForChore(chore) {
+    return chore && typeof chore.points === 'number' ? chore.points : 1;
+  }
+
+  function pointsForLog(log) {
+    return pointsForChore(state.choresById[log.chore_id]);
+  }
+
+  function countPointsTotals(logs) {
+    var totals = { a: 0, b: 0 };
+    logs.forEach(function (log) {
+      var pts = pointsForLog(log);
+      if (log.done_by === 'both') { totals.a += pts; totals.b += pts; }
+      else if (log.done_by === 'a') totals.a += pts;
+      else if (log.done_by === 'b') totals.b += pts;
+    });
+    return totals;
+  }
+
+  function renderChoreButtonsInto(containerEl, chores, onPick) {
+    containerEl.innerHTML = '';
+    if (!chores.length) {
+      containerEl.innerHTML = '<div class="empty-state">表示できる家事がありません。設定から家事を追加してください</div>';
+      return;
+    }
+    groupChoresByCategory(chores).forEach(function (g) {
+      var catDiv = document.createElement('div');
+      catDiv.className = 'chore-category';
+      var title = document.createElement('div');
+      title.className = 'chore-category-title';
+      title.textContent = g.category;
+      catDiv.appendChild(title);
+      g.items.forEach(function (chore) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'chore-row';
+        row.innerHTML = '<span>' + escapeHtml(chore.name) + '</span><span class="chore-row-points">' + pointsForChore(chore) + 'pt</span>';
+        row.addEventListener('click', function () { onPick(chore.id); });
+        catDiv.appendChild(row);
+      });
+      containerEl.appendChild(catDiv);
+    });
+  }
+
+  // ---------- どこからでも記録できるFAB ----------
+
+  function bindFabEvents() {
+    document.getElementById('fabButton').addEventListener('click', openFabSheet);
+    document.getElementById('closeFabSheetBtn').addEventListener('click', closeFabSheet);
+    document.getElementById('fabSheet').addEventListener('click', function (e) {
+      if (e.target.id === 'fabSheet') closeFabSheet();
+    });
+  }
+
+  function openFabSheet() {
+    renderChoreButtonsInto(document.getElementById('fabChoreList'), state.chores, function (choreId) {
+      closeFabSheet();
+      openRecordModal({ choreId: choreId });
+    });
+    document.getElementById('fabSheet').classList.remove('hidden');
+  }
+
+  function closeFabSheet() {
+    document.getElementById('fabSheet').classList.add('hidden');
+  }
+
+  // ---------- ホームの実績カード(今週の対決・今日のポイント) ----------
+
+  async function renderScoreCard() {
+    var weekStart = startOfWeekMonday(new Date());
+    var res = await fetchLogsRange(weekStart, addDays(weekStart, 7));
+    if (res.error) return;
+    var weekLogs = res.data;
+    var todayStart = startOfDay(new Date());
+    var todayLogs = weekLogs.filter(function (log) { return new Date(log.done_at) >= todayStart; });
+
+    var weekPts = countPointsTotals(weekLogs);
+    var todayPts = countPointsTotals(todayLogs);
+    var maxPts = Math.max(weekPts.a, weekPts.b, 1);
+
+    document.getElementById('weekBattleBars').innerHTML =
+      barRowHtml(state.userNames.a, weekPts.a, maxPts, CONFIG.USERS.a.color, 'pt') +
+      barRowHtml(state.userNames.b, weekPts.b, maxPts, CONFIG.USERS.b.color, 'pt');
+
+    document.getElementById('scoreLeaderText').textContent = weekPts.a === weekPts.b
+      ? '同点で並走中'
+      : (weekPts.a > weekPts.b ? state.userNames.a : state.userNames.b) + ' が ' + Math.abs(weekPts.a - weekPts.b) + 'pt リード';
+
+    document.getElementById('todayPointsText').innerHTML =
+      '<span style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + todayPts.a + 'pt</span>' +
+      '<span style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + todayPts.b + 'pt</span>';
   }
 
   async function toggleChoreActive(id, isActive) {
@@ -457,29 +554,10 @@
   // ---------- 記録タブ ----------
 
   function renderRecordView() {
-    var listEl = document.getElementById('choreList');
-    listEl.innerHTML = '';
-    if (!state.chores.length) {
-      listEl.innerHTML = '<div class="empty-state">表示できる家事がありません。設定から家事を追加してください</div>';
-      return;
-    }
-    groupChoresByCategory(state.chores).forEach(function (g) {
-      var catDiv = document.createElement('div');
-      catDiv.className = 'chore-category';
-      var title = document.createElement('div');
-      title.className = 'chore-category-title';
-      title.textContent = g.category;
-      catDiv.appendChild(title);
-      g.items.forEach(function (chore) {
-        var row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'chore-row';
-        row.innerHTML = '<span>' + escapeHtml(chore.name) + '</span><span class="chore-row-arrow">›</span>';
-        row.addEventListener('click', function () { openRecordModal({ choreId: chore.id }); });
-        catDiv.appendChild(row);
-      });
-      listEl.appendChild(catDiv);
+    renderChoreButtonsInto(document.getElementById('choreList'), state.chores, function (choreId) {
+      openRecordModal({ choreId: choreId });
     });
+    renderScoreCard();
   }
 
   // ---------- 記録モーダル ----------
@@ -997,12 +1075,12 @@
     }).join('') : '<tr><td colspan="5" class="empty-state">記録はありません</td></tr>';
   }
 
-  function barRowHtml(name, count, max, color) {
+  function barRowHtml(name, count, max, color, unit) {
     var pct = Math.round((count / max) * 100);
     return '<div class="summary-bar-row">' +
       '<div class="summary-bar-label">' + escapeHtml(name) + '</div>' +
       '<div class="summary-bar-track"><div class="summary-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
-      '<div class="summary-bar-count">' + count + '</div>' +
+      '<div class="summary-bar-count">' + count + (unit || '') + '</div>' +
       '</div>';
   }
 
@@ -1069,7 +1147,7 @@
       var main = document.createElement('div');
       main.className = 'chore-manage-main';
       main.innerHTML = '<div class="chore-manage-name">' + escapeHtml(chore.name) + '</div>' +
-        '<div class="chore-manage-meta">' + escapeHtml(chore.category) + ' ・ ' + escapeHtml(DURATION_LABELS[chore.duration_bucket] || '') + '</div>';
+        '<div class="chore-manage-meta">' + escapeHtml(chore.category) + ' ・ ' + escapeHtml(DURATION_LABELS[chore.duration_bucket] || '') + ' ・ ' + pointsForChore(chore) + 'pt</div>';
 
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
@@ -1120,6 +1198,7 @@
     document.getElementById('choreCategoryInput').value = chore ? chore.category : '';
     updateCategoryOptions();
     setSegmentValue('choreDurationSegment', chore ? chore.duration_bucket : 'under5');
+    document.getElementById('chorePointsInput').value = chore ? pointsForChore(chore) : 1;
     document.getElementById('choreModal').classList.remove('hidden');
   }
 
@@ -1138,14 +1217,15 @@
     var name = document.getElementById('choreNameInput').value.trim();
     var category = document.getElementById('choreCategoryInput').value.trim();
     var duration = getSegmentValue('choreDurationSegment');
-    if (!name || !category || !duration) {
-      showToast('家事名・カテゴリ・目安時間を入力してください。', true);
+    var points = parseInt(document.getElementById('chorePointsInput').value, 10);
+    if (!name || !category || !duration || !points || points < 1) {
+      showToast('家事名・カテゴリ・目安時間・ポイントを入力してください。', true);
       return;
     }
     var saveBtn = document.getElementById('saveChoreBtn');
     saveBtn.disabled = true;
     try {
-      var res = await upsertChore({ id: state.editingChoreId, name: name, category: category, duration_bucket: duration });
+      var res = await upsertChore({ id: state.editingChoreId, name: name, category: category, duration_bucket: duration, points: points });
       if (res.error) throw res.error;
       closeChoreModal();
       await loadChores();

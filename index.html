@@ -28,6 +28,15 @@
 
   <!-- 記録タブ -->
   <section id="view-record" class="view">
+    <div class="score-card" id="scoreCard">
+      <div class="score-card-title">今週の対決(月〜日)</div>
+      <div id="weekBattleBars"></div>
+      <div class="score-leader" id="scoreLeaderText"></div>
+      <div class="score-today-row">
+        <span>今日のポイント</span>
+        <div class="score-today-values" id="todayPointsText"></div>
+      </div>
+    </div>
     <div class="chore-list" id="choreList"></div>
   </section>
 
@@ -82,6 +91,8 @@
 
 </main>
 
+<div class="fab-wrap"><button type="button" class="fab-button" id="fabButton" aria-label="記録する">＋ 記録</button></div>
+
 <nav class="tab-bar">
   <button type="button" class="tab-btn active" data-view="record">
     <span class="tab-icon">📝</span><span>記録</span>
@@ -115,6 +126,16 @@
       <button type="button" id="cancelRecordBtn" class="btn-ghost">キャンセル</button>
       <button type="button" id="saveRecordBtn" class="btn-primary">保存</button>
     </div>
+  </div>
+</div>
+
+<!-- どこからでも記録できる家事選択シート -->
+<div id="fabSheet" class="sheet-overlay hidden">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">記録する家事を選ぶ</h2>
+    <div id="fabChoreList" class="sheet-body"></div>
+    <button type="button" id="closeFabSheetBtn" class="btn-ghost">閉じる</button>
   </div>
 </div>
 
@@ -174,6 +195,8 @@
       <button type="button" class="segment-btn" data-value="10to15">10〜15分</button>
       <button type="button" class="segment-btn" data-value="15to20">15〜20分</button>
     </div>
+    <div class="field-label">ポイント(手間の目安)</div>
+    <input type="number" id="chorePointsInput" class="text-input" min="1" max="20" step="1">
     <div class="modal-actions">
       <button type="button" id="cancelChoreBtn" class="btn-ghost">キャンセル</button>
       <button type="button" id="saveChoreBtn" class="btn-primary">保存</button>

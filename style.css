@@ -145,6 +145,12 @@ main {
   -webkit-overflow-scrolling: touch;
 }
 
+/* 中身がビューポートより短い画面(カレンダー・集計など)でもmain自体を必ずスクロール可能にしておく。
+   スクロール範囲が無いと、ボタンタップ時にiOS SafariがビジュアルビューポートごとずらしてしまいFAB/ヘッダー/タブバーが浮いて見える。 */
+.view {
+  min-height: calc(100% + 1px);
+}
+
 .fab-wrap {
   position: fixed;
   left: 0;

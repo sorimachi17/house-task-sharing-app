@@ -164,6 +164,7 @@
   document.addEventListener('DOMContentLoaded', init);
 
   async function init() {
+    bindBlurOnTapFix();
     bindHeaderEvents();
     bindTabBar();
     bindModalEvents();
@@ -179,6 +180,15 @@
     applyUserTheme();
     await loadChores();
     renderCurrentView();
+  }
+
+  // position:fixedの要素内のボタンにフォーカスが残ると、iOS SafariがそのボタンをスクロールしてUIごとずらすことがある。
+  // タップ後にすぐフォーカスを外すことで発生を防ぐ。
+  function bindBlurOnTapFix() {
+    document.addEventListener('touchend', function (e) {
+      var btn = e.target.closest('button');
+      if (btn) setTimeout(function () { btn.blur(); }, 0);
+    }, { passive: true });
   }
 
   function applyUserTheme() {

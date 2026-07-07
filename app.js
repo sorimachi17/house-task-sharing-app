@@ -397,6 +397,7 @@
         chore_id: payload.chore_id,
         done_by: payload.done_by,
         done_at: payload.done_at,
+        thanks_by: payload.thanks_by || [],
         created_at: new Date().toISOString()
       });
       writeDemoLogs(logs);
@@ -547,6 +548,18 @@
     return '二人で';
   }
 
+  function thanksByForLog(log) {
+    return Array.isArray(log.thanks_by) ? log.thanks_by : [];
+  }
+
+  function canThankLog(log) {
+    return log && log.done_by !== 'both' && log.done_by !== state.currentUser;
+  }
+
+  function hasThankedLog(log) {
+    return thanksByForLog(log).indexOf(state.currentUser) !== -1;
+  }
+
   function renderChoreButtonsInto(containerEl, chores, onPick) {
     containerEl.innerHTML = '';
     if (!chores.length) {
@@ -641,7 +654,12 @@
         var t = new Date(log.done_at);
         var chore = state.choresById[log.chore_id];
         var choreName = chore ? chore.name : '(削除済み)';
-        return '<button type="button" class="score-today-item" data-home-log-id="' + escapeHtml(log.id) + '">' +
+        var thanks = thanksByForLog(log);
+        var thankLabel = hasThankedLog(log) ? 'ありがとう済み' : 'ありがとう';
+        var thankHtml = canThankLog(log)
+          ? '<button type="button" class="score-thanks-btn' + (hasThankedLog(log) ? ' is-thanked' : '') + '" data-thanks-log-id="' + escapeHtml(log.id) + '">' + thankLabel + '</button>'
+          : (thanks.length ? '<span class="score-thanks-label">ありがとう ' + thanks.length + '</span>' : '');
+        return '<div class="score-today-item" data-home-log-id="' + escapeHtml(log.id) + '">' +
           '<span class="score-today-time">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + '</span>' +
           '<span class="score-today-dot" style="background:' + dotColorForUser(log.done_by) + '"></span>' +
           '<span class="score-today-main">' +
@@ -649,19 +667,44 @@
             '<small>' + escapeHtml(userLabelForLog(log)) + '</small>' +
           '</span>' +
           '<span class="score-today-points">' + pointsForLog(log) + 'pt</span>' +
-        '</button>';
+          thankHtml +
+        '</div>';
       }).join('') + '</div>';
   }
 
   function bindScoreTodayRows(logs) {
     var byId = {};
     logs.forEach(function (log) { byId[log.id] = log; });
+    document.querySelectorAll('.score-thanks-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var log = byId[btn.dataset.thanksLogId];
+        if (log) toggleThanksForLog(log);
+      });
+    });
     document.querySelectorAll('.score-today-item').forEach(function (row) {
       row.addEventListener('click', function () {
         var log = byId[row.dataset.homeLogId];
         if (log) openRecordModal({ log: log });
       });
     });
+  }
+
+  async function toggleThanksForLog(log) {
+    if (!canThankLog(log)) return;
+
+    var list = thanksByForLog(log).slice();
+    var idx = list.indexOf(state.currentUser);
+    if (idx >= 0) list.splice(idx, 1);
+    else list.push(state.currentUser);
+
+    var res = await updateLogRecord(log.id, { thanks_by: list });
+    if (res.error) {
+      showToast('ありがとうを保存できませんでした。Supabaseで logs.thanks_by 列を追加してください。', true);
+      return;
+    }
+    showToast(idx >= 0 ? 'ありがとうを取り消しました' : 'ありがとうしました');
+    renderRecordView();
   }
 
   async function renderHomeInsights() {

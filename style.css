@@ -1,6 +1,7 @@
 :root {
   --color-a: #00A6B8;
   --color-b: #58A6FF;
+  --color-both: #F5B84B;
   --bg: #FFFFFF;
   --bg-soft: #F4F8F9;
   --surface: #ffffff;
@@ -1599,7 +1600,7 @@ main {
 }
 
 .summary-breakdown-legend i.both {
-  background: linear-gradient(90deg, var(--color-a) 0 50%, var(--color-b) 50% 100%);
+  background: var(--color-both);
 }
 
 .summary-stack-list {
@@ -1649,7 +1650,7 @@ main {
 }
 
 .summary-stack-both {
-  background: linear-gradient(90deg, var(--color-a) 0 50%, var(--color-b) 50% 100%);
+  background: var(--color-both);
 }
 
 .summary-stack-count {

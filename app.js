@@ -1506,10 +1506,12 @@
     var res = await fetchLogsRange(range.start, range.end);
 
     var barsEl = document.getElementById('summaryBars');
+    var breakdownEl = document.getElementById('summaryBreakdown');
     var tbody = document.getElementById('summaryTableBody');
 
     if (res.error) {
       barsEl.innerHTML = '<div class="empty-state">読み込みに失敗しました。電波状況を確認してもう一度お試しください。</div>';
+      breakdownEl.innerHTML = '';
       tbody.innerHTML = '';
       return;
     }
@@ -1536,12 +1538,16 @@
       var chore = state.choresById[id];
       return {
         name: chore ? chore.name : '(削除済み)',
+        aRaw: p.aRaw,
+        bRaw: p.bRaw,
         a: p.aRaw + p.bothRaw,
         b: p.bRaw + p.bothRaw,
         both: p.bothRaw,
         total: p.aRaw + p.bRaw + p.bothRaw
       };
     }).sort(function (x, y) { return y.total - x.total; });
+
+    breakdownEl.innerHTML = summaryBreakdownHtml(rows, countA, countB, countBoth);
 
     tbody.innerHTML = rows.length ? rows.map(function (r) {
       return '<tr><td>' + escapeHtml(r.name) + '</td><td>' + r.a + '</td><td>' + r.b + '</td><td>' + r.both + '</td><td>' + r.total + '</td></tr>';
@@ -1555,6 +1561,59 @@
       '<div class="summary-bar-track"><div class="summary-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
       '<div class="summary-bar-count">' + count + (unit || '') + '</div>' +
       '</div>';
+  }
+
+  function summaryBreakdownHtml(rows, countA, countB, countBoth) {
+    if (!rows.length) {
+      return '<div class="summary-breakdown-card"><div class="empty-state">記録が増えると、家事ごとの内訳が表示されます</div></div>';
+    }
+
+    var total = rows.reduce(function (sum, row) { return sum + row.total; }, 0);
+    var top = rows[0];
+    var maxTotal = Math.max.apply(null, rows.map(function (row) { return row.total; }));
+
+    return '<div class="summary-breakdown-card">' +
+      '<div class="summary-kpis">' +
+        summaryKpiHtml('合計', total + '件') +
+        summaryKpiHtml('二人で', countBoth + '件') +
+        summaryKpiHtml('最多', top ? escapeHtml(top.name) + ' ' + top.total + '件' : '-') +
+      '</div>' +
+      '<div class="summary-breakdown-head">' +
+        '<div class="summary-breakdown-title">家事別の担当バランス</div>' +
+        '<div class="summary-breakdown-legend">' +
+          '<span><i style="background:' + CONFIG.USERS.a.color + '"></i>' + escapeHtml(state.userNames.a) + '</span>' +
+          '<span><i class="both"></i>二人で</span>' +
+          '<span><i style="background:' + CONFIG.USERS.b.color + '"></i>' + escapeHtml(state.userNames.b) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="summary-stack-list">' + rows.map(function (row) {
+        return summaryStackRowHtml(row, maxTotal);
+      }).join('') + '</div>' +
+    '</div>';
+  }
+
+  function summaryKpiHtml(label, value) {
+    return '<div class="summary-kpi"><span>' + escapeHtml(label) + '</span><b>' + value + '</b></div>';
+  }
+
+  function summaryStackRowHtml(row, maxTotal) {
+    var width = Math.max(8, Math.round((row.total / Math.max(maxTotal, 1)) * 100));
+    var total = Math.max(row.total, 1);
+    var aPct = Math.round((row.aRaw / total) * 100);
+    var bothPct = Math.round((row.both / total) * 100);
+    var bPct = Math.max(0, 100 - aPct - bothPct);
+
+    return '<div class="summary-stack-row">' +
+      '<div class="summary-stack-name">' + escapeHtml(row.name) + '</div>' +
+      '<div class="summary-stack-track-wrap">' +
+        '<div class="summary-stack-track" style="width:' + width + '%">' +
+          (row.aRaw ? '<span class="summary-stack-a" style="width:' + aPct + '%"></span>' : '') +
+          (row.both ? '<span class="summary-stack-both" style="width:' + bothPct + '%"></span>' : '') +
+          (row.bRaw ? '<span class="summary-stack-b" style="width:' + bPct + '%"></span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="summary-stack-count">' + row.total + '件</div>' +
+    '</div>';
   }
 
   // ---------- 設定シート(表示名・家事マスタ管理) ----------

@@ -622,6 +622,46 @@
     document.getElementById('todayPointsText').innerHTML =
       '<span style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + todayPts.a + 'pt</span>' +
       '<span style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + todayPts.b + 'pt</span>';
+
+    document.getElementById('todayChoresList').innerHTML = scoreTodayChoresHtml(todayLogs);
+    bindScoreTodayRows(todayLogs);
+  }
+
+  function scoreTodayChoresHtml(logs) {
+    if (!logs.length) {
+      return '<div class="score-today-empty">今日はまだ記録がありません</div>';
+    }
+
+    var sorted = logs.slice().sort(function (a, b) {
+      return new Date(b.done_at) - new Date(a.done_at);
+    });
+
+    return '<div class="score-today-title">今日やってくれたこと</div>' +
+      '<div class="score-today-list">' + sorted.map(function (log) {
+        var t = new Date(log.done_at);
+        var chore = state.choresById[log.chore_id];
+        var choreName = chore ? chore.name : '(削除済み)';
+        return '<button type="button" class="score-today-item" data-home-log-id="' + escapeHtml(log.id) + '">' +
+          '<span class="score-today-time">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + '</span>' +
+          '<span class="score-today-dot" style="background:' + dotColorForUser(log.done_by) + '"></span>' +
+          '<span class="score-today-main">' +
+            '<b>' + escapeHtml(choreName) + '</b>' +
+            '<small>' + escapeHtml(userLabelForLog(log)) + '</small>' +
+          '</span>' +
+          '<span class="score-today-points">' + pointsForLog(log) + 'pt</span>' +
+        '</button>';
+      }).join('') + '</div>';
+  }
+
+  function bindScoreTodayRows(logs) {
+    var byId = {};
+    logs.forEach(function (log) { byId[log.id] = log; });
+    document.querySelectorAll('.score-today-item').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var log = byId[row.dataset.homeLogId];
+        if (log) openRecordModal({ log: log });
+      });
+    });
   }
 
   async function renderHomeInsights() {

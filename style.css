@@ -789,9 +789,9 @@ main {
 }
 
 .home-day-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 26px;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
   background: var(--surface-soft);
@@ -802,12 +802,33 @@ main {
   list-style: none;
 }
 
+.home-day-head::after {
+  content: "▼";
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+
 .home-day-head::-webkit-details-marker {
   display: none;
 }
 
 .home-day-group[open] .home-day-head {
   border-bottom: 1px solid var(--border);
+}
+
+.home-day-group[open] .home-day-head::after {
+  transform: rotate(180deg);
+  color: var(--color-a);
+  background: rgba(0, 166, 184, 0.12);
 }
 
 .home-day-total {

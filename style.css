@@ -372,20 +372,21 @@ main {
 }
 
 .score-thanks-btn {
-  border: 1px solid rgba(245, 184, 75, 0.5);
-  background: rgba(245, 184, 75, 0.16);
-  color: #9B6515;
+  border: 1px solid var(--color-both);
+  background: var(--color-both);
+  color: #fff;
   border-radius: 999px;
-  padding: 5px 8px;
+  padding: 7px 10px;
   font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(245, 184, 75, 0.22);
 }
 
 .score-thanks-btn.is-thanked {
-  background: var(--color-both);
-  color: #fff;
-  border-color: var(--color-both);
+  background: var(--surface);
+  color: #9B6515;
+  box-shadow: none;
 }
 
 .score-thanks-label {

@@ -655,10 +655,10 @@
         var chore = state.choresById[log.chore_id];
         var choreName = chore ? chore.name : '(削除済み)';
         var thanks = thanksByForLog(log);
-        var thankLabel = hasThankedLog(log) ? 'ありがとう済み' : 'ありがとう';
+        var thankLabel = hasThankedLog(log) ? 'ありがとう送信済み' : 'ありがとうを送る';
         var thankHtml = canThankLog(log)
           ? '<button type="button" class="score-thanks-btn' + (hasThankedLog(log) ? ' is-thanked' : '') + '" data-thanks-log-id="' + escapeHtml(log.id) + '">' + thankLabel + '</button>'
-          : (thanks.length ? '<span class="score-thanks-label">ありがとう ' + thanks.length + '</span>' : '');
+          : (thanks.length ? '<span class="score-thanks-label">ありがとう済み ' + thanks.length + '</span>' : '');
         return '<div class="score-today-item" data-home-log-id="' + escapeHtml(log.id) + '">' +
           '<span class="score-today-time">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + '</span>' +
           '<span class="score-today-dot" style="background:' + dotColorForUser(log.done_by) + '"></span>' +

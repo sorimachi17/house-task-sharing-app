@@ -723,11 +723,16 @@
 
   function homeWeekNudgeHtml(totalPts, weekPts) {
     var pick = pickHomeNudge(totalPts, weekPts);
+    var characterHtml = pick.image
+      ? '<div class="home-week-character home-week-character--image">' +
+          '<img src="' + escapeHtml(pick.image) + '" alt="" loading="lazy">' +
+        '</div>'
+      : '<div class="home-week-character home-week-character--' + pick.character + '">' +
+          '<span class="home-week-face"></span><span class="home-week-prop"></span>' +
+          '<span class="home-week-spark home-week-spark-a"></span><span class="home-week-spark home-week-spark-b"></span>' +
+        '</div>';
     return '<div class="home-week-nudge">' +
-      '<div class="home-week-character home-week-character--' + pick.character + '">' +
-        '<span class="home-week-face"></span><span class="home-week-prop"></span>' +
-        '<span class="home-week-spark home-week-spark-a"></span><span class="home-week-spark home-week-spark-b"></span>' +
-      '</div>' +
+      characterHtml +
       '<div class="home-week-nudge-text"><b>' + escapeHtml(pick.title) + '</b><span>' + escapeHtml(pick.body) + '</span></div>' +
     '</div>';
   }
@@ -777,8 +782,10 @@
     ];
     var seed = dateKey(new Date()) + ':' + totalPts + ':' + weekPts.a + ':' + weekPts.b + ':' + nextHomeNudgeCount();
     var h = hashText(seed);
+    var characterImages = Array.isArray(CONFIG.CHARACTER_IMAGES) ? CONFIG.CHARACTER_IMAGES.filter(Boolean) : [];
     return {
       character: characters[h % characters.length],
+      image: characterImages.length ? characterImages[h % characterImages.length] : '',
       title: titles[h % titles.length],
       body: bodies[Math.floor(h / titles.length) % bodies.length]
     };

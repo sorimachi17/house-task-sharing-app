@@ -667,12 +667,14 @@
           '<div class="home-pie" style="--pie-a:' + aDeg + 'deg">' +
             '<div class="home-pie-center">' + totalPts + 'pt<span>合計</span></div>' +
           '</div>' +
-          '<div class="home-pie-list">' +
-            homePieRowHtml(state.userNames.a, weekPts.a, aPct, CONFIG.USERS.a.color) +
-            homePieRowHtml(state.userNames.b, weekPts.b, bPct, CONFIG.USERS.b.color) +
+          '<div class="home-pie-side">' +
+            '<div class="home-pie-list">' +
+              homePieRowHtml(state.userNames.a, weekPts.a, aPct, CONFIG.USERS.a.color) +
+              homePieRowHtml(state.userNames.b, weekPts.b, bPct, CONFIG.USERS.b.color) +
+            '</div>' +
+            homeWeekNudgeHtml(totalPts, weekPts) +
           '</div>' +
         '</div>' +
-        homeWeekNudgeHtml(totalPts, weekPts) +
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +

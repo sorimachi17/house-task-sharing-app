@@ -440,18 +440,13 @@ main {
 
 .home-split-grid {
   display: grid;
-  grid-template-columns: 128px 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 12px;
   align-items: center;
 }
 
 .home-pie {
-  width: 128px;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  background: conic-gradient(var(--color-a) 0deg, var(--color-a) var(--pie-a, 180deg), var(--color-b) var(--pie-a, 180deg), var(--color-b) 360deg);
-  position: relative;
-  box-shadow: inset 0 0 0 1px rgba(23, 33, 36, 0.06);
+  display: none;
 }
 
 .home-pie::after {
@@ -484,7 +479,7 @@ main {
 
 .home-pie-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .home-pie-side {
@@ -495,22 +490,50 @@ main {
 
 .home-pie-row {
   display: grid;
-  grid-template-columns: 10px 1fr auto;
+  grid-template-columns: 56px minmax(0, 1fr) 58px;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 12.5px;
   font-weight: 800;
 }
 
-.home-pie-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.home-pie-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-pie-bar {
+  height: 22px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.home-pie-bar span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
 }
 
 .home-pie-muted {
   color: var(--text-muted);
   font-weight: 700;
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  line-height: 1.1;
+}
+
+.home-pie-muted b {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.home-pie-muted small {
+  font-size: 10.5px;
 }
 
 .home-week-nudge {

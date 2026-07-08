@@ -495,7 +495,7 @@ main {
 
 .home-pie-row {
   display: grid;
-  grid-template-columns: 10px 1fr auto;
+  grid-template-columns: 10px 54px minmax(72px, 1fr) auto;
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
@@ -511,6 +511,21 @@ main {
 .home-pie-muted {
   color: var(--text-muted);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-pie-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.home-pie-bar span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
 }
 
 .home-today-panel {
@@ -521,7 +536,9 @@ main {
 
 .home-today-row {
   margin-top: 0;
+  padding-top: 0;
   margin-bottom: 12px;
+  border-top: 0;
 }
 
 .home-week-nudge {

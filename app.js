@@ -746,7 +746,7 @@
     el.innerHTML =
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
-          '<div class="home-insight-title">今週の割合</div>' +
+          '<div class="home-insight-title">今週の実績</div>' +
           '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '<br>' + escapeHtml(leaderText) + '</div>' +
         '</div>' +
         '<div class="home-split-grid">' +
@@ -816,6 +816,7 @@
     return '<div class="home-pie-row">' +
       '<span class="home-pie-dot" style="background:' + color + '"></span>' +
       '<span>' + escapeHtml(name) + '</span>' +
+      '<span class="home-pie-bar"><span style="width:' + pct + '%;background:' + color + '"></span></span>' +
       '<span class="home-pie-muted">' + points + 'pt / ' + pct + '%</span>' +
     '</div>';
   }

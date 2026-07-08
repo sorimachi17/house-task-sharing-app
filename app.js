@@ -803,9 +803,16 @@
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
           '<div class="home-insight-title">分析メモ</div>' +
-          '<div class="home-insight-sub">' + escapeHtml(range7Label) + '</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
         '</div>' +
-        homeAnalysisHtml(logs7) +
+        homeAnalysisHtml(weekLogs) +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
+          '<div class="home-insight-title">担当の傾向</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
+        '</div>' +
+        homeChoreTrendHtml(weekLogs) +
       '</div>';
 
     bindHomeDailyLogRows(weekLogs);
@@ -1088,6 +1095,88 @@
       homeMetricHtml('多い日', topDay ? topDay.label + ' ' + topDay.points + 'pt' : '-') +
       homeMetricHtml('バランス', balance) +
     '</div>';
+  }
+
+  function homeChoreTrendHtml(logs) {
+    var rows = buildChoreTrendRows(logs).slice(0, 4);
+    if (!rows.length) {
+      return '<div class="home-trend-empty">今週は大きな偏りはまだ見えていません</div>';
+    }
+
+    return '<div class="home-trend-list">' + rows.map(function (row) {
+      return '<div class="home-trend-row">' +
+        '<div class="home-trend-main">' +
+          '<b>' + escapeHtml(row.name) + '</b>' +
+          '<span>' + escapeHtml(row.message) + '</span>' +
+        '</div>' +
+        '<div class="home-trend-counts">' +
+          '<span style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + row.a + '回</span>' +
+          '<span style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + row.b + '回</span>' +
+          (row.both ? '<span>二人で ' + row.both + '回</span>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function buildChoreTrendRows(logs) {
+    var byChore = {};
+    logs.forEach(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var id = log.chore_id || 'unknown';
+      if (!byChore[id]) {
+        byChore[id] = {
+          name: chore ? chore.name : '(削除済みの家事)',
+          a: 0,
+          b: 0,
+          both: 0,
+          points: 0
+        };
+      }
+      var row = byChore[id];
+      if (log.done_by === 'a') row.a++;
+      else if (log.done_by === 'b') row.b++;
+      else row.both++;
+      row.points += pointsForLog(log);
+    });
+
+    return Object.keys(byChore).map(function (id) {
+      var row = byChore[id];
+      var total = row.a + row.b + row.both;
+      var soloTotal = row.a + row.b;
+      var missing = row.a === 0 && row.b > 0 ? state.userNames.a :
+        (row.b === 0 && row.a > 0 ? state.userNames.b : '');
+      var dominant = row.a > row.b ? state.userNames.a : state.userNames.b;
+      var lighter = row.a > row.b ? state.userNames.b : state.userNames.a;
+      var gap = Math.abs(row.a - row.b);
+      var message = '';
+      var score = gap * 10 + total;
+
+      if (missing && soloTotal >= 2) {
+        message = missing + 'は今週まだ少なめ';
+        score += 100;
+      } else if (soloTotal >= 3 && gap >= 2) {
+        message = dominant + 'に寄り気味、' + lighter + 'は少なめ';
+        score += 60;
+      } else if (row.both >= 2) {
+        message = '二人でやる記録が多め';
+        score += 20;
+      }
+
+      return {
+        name: row.name,
+        a: row.a,
+        b: row.b,
+        both: row.both,
+        points: row.points,
+        total: total,
+        score: score,
+        message: message
+      };
+    }).filter(function (row) {
+      return row.total >= 2 && row.message;
+    }).sort(function (a, b) {
+      return b.score - a.score || b.points - a.points;
+    });
   }
 
   function homeMetricHtml(label, value) {

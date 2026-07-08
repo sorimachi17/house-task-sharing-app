@@ -1093,6 +1093,60 @@ main {
   color: var(--text);
 }
 
+.home-trend-list {
+  display: grid;
+  gap: 8px;
+}
+
+.home-trend-row {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 10px;
+}
+
+.home-trend-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.home-trend-main b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.home-trend-main span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.home-trend-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.home-trend-empty {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 12px;
+}
+
 .chore-row-points {
   color: var(--text-muted);
   font-size: 12.5px;

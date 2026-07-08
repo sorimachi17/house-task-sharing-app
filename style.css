@@ -513,6 +513,17 @@ main {
   font-weight: 700;
 }
 
+.home-today-panel {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.home-today-row {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
 .home-week-nudge {
   display: grid;
   grid-template-columns: 62px 1fr;

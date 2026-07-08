@@ -610,6 +610,7 @@
   // ---------- ホームの実績カード(今週の実績・今日のポイント) ----------
 
   async function renderScoreCard() {
+    if (!document.getElementById('scoreCard')) return;
     var weekStart = startOfWeekMonday(new Date());
     var weekEnd = addDays(weekStart, 7);
     var res = await fetchLogsRange(weekStart, weekEnd);
@@ -729,7 +730,9 @@
     var range7Start = addDays(todayStart, -6);
     var range7Label = formatDateRange(range7Start, rangeEnd);
     var weekLogs = logs14.filter(function (log) { return new Date(log.done_at) >= weekStart; });
+    var todayLogs = weekLogs.filter(function (log) { return new Date(log.done_at) >= todayStart; });
     var weekPts = countPointsTotals(weekLogs);
+    var todayPts = countPointsTotals(todayLogs);
     var totalPts = weekPts.a + weekPts.b;
     var aPct = totalPts ? Math.round((weekPts.a / totalPts) * 100) : 0;
     var bPct = totalPts ? 100 - aPct : 0;
@@ -757,6 +760,16 @@
             '</div>' +
             homeWeekNudgeHtml(totalPts, weekPts) +
           '</div>' +
+        '</div>' +
+        '<div class="home-today-panel">' +
+          '<div class="score-today-row home-today-row">' +
+            '<span>今日のポイント</span>' +
+            '<div class="score-today-values">' +
+              '<span style="color:' + CONFIG.USERS.a.color + '">' + escapeHtml(state.userNames.a) + ' ' + todayPts.a + 'pt</span>' +
+              '<span style="color:' + CONFIG.USERS.b.color + '">' + escapeHtml(state.userNames.b) + ' ' + todayPts.b + 'pt</span>' +
+            '</div>' +
+          '</div>' +
+          scoreTodayChoresHtml(todayLogs) +
         '</div>' +
       '</div>' +
       '<div class="home-insight-card">' +
@@ -796,6 +809,7 @@
       '</div>';
 
     bindHomeDailyLogRows(weekLogs);
+    bindScoreTodayRows(todayLogs);
   }
 
   function homePieRowHtml(name, points, pct, color) {

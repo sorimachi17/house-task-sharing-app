@@ -774,6 +774,13 @@
       '</div>' +
       '<div class="home-insight-card">' +
         '<div class="home-insight-head">' +
+          '<div class="home-insight-title">担当の傾向</div>' +
+          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
+        '</div>' +
+        homeChoreTrendTableHtml(weekLogs) +
+      '</div>' +
+      '<div class="home-insight-card">' +
+        '<div class="home-insight-head">' +
           '<div class="home-insight-title">今週の陣取りマップ</div>' +
           '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '<br>面積=pt / 色=担当</div>' +
         '</div>' +
@@ -806,13 +813,6 @@
           '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
         '</div>' +
         homeAnalysisHtml(weekLogs) +
-      '</div>' +
-      '<div class="home-insight-card">' +
-        '<div class="home-insight-head">' +
-          '<div class="home-insight-title">担当の傾向</div>' +
-          '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
-        '</div>' +
-        homeChoreTrendTableHtml(weekLogs) +
       '</div>';
 
     bindHomeDailyLogRows(weekLogs);
@@ -1193,10 +1193,18 @@
         '<span>二人で</span>' +
       '</div>' +
       rows.map(function (row) {
+        var aPct = row.total ? Math.round((row.a / row.total) * 100) : 0;
+        var bPct = row.total ? Math.round((row.b / row.total) * 100) : 0;
+        var bothPct = Math.max(0, 100 - aPct - bPct);
         return '<div class="home-trend-table-row">' +
           '<div class="home-trend-chore">' +
             '<b>' + escapeHtml(row.name) + '</b>' +
             '<span>' + row.total + '回 / ' + row.points + 'pt</span>' +
+            '<div class="home-trend-bar" aria-hidden="true">' +
+              (row.a ? '<span style="width:' + aPct + '%;background:' + CONFIG.USERS.a.color + '"></span>' : '') +
+              (row.both ? '<span class="home-trend-bar-both" style="width:' + bothPct + '%"></span>' : '') +
+              (row.b ? '<span style="width:' + bPct + '%;background:' + CONFIG.USERS.b.color + '"></span>' : '') +
+            '</div>' +
           '</div>' +
           '<div class="home-trend-num" style="color:' + CONFIG.USERS.a.color + '">' + row.a + '</div>' +
           '<div class="home-trend-num" style="color:' + CONFIG.USERS.b.color + '">' + row.b + '</div>' +

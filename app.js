@@ -812,7 +812,7 @@
           '<div class="home-insight-title">担当の傾向</div>' +
           '<div class="home-insight-sub">' + escapeHtml(weekRangeLabel) + '</div>' +
         '</div>' +
-        homeChoreTrendHtml(weekLogs) +
+        homeChoreTrendTableHtml(weekLogs) +
       '</div>';
 
     bindHomeDailyLogRows(weekLogs);
@@ -1176,6 +1176,63 @@
       return row.total >= 2 && row.message;
     }).sort(function (a, b) {
       return b.score - a.score || b.points - a.points;
+    });
+  }
+
+  function homeChoreTrendTableHtml(logs) {
+    var rows = buildChoreTrendTableRows(logs);
+    if (!rows.length) {
+      return '<div class="home-trend-empty">今週やった家事が増えると、担当回数の一覧が表示されます</div>';
+    }
+
+    return '<div class="home-trend-table">' +
+      '<div class="home-trend-table-head">' +
+        '<span>家事</span>' +
+        '<span>' + escapeHtml(state.userNames.a) + '</span>' +
+        '<span>' + escapeHtml(state.userNames.b) + '</span>' +
+        '<span>二人で</span>' +
+      '</div>' +
+      rows.map(function (row) {
+        return '<div class="home-trend-table-row">' +
+          '<div class="home-trend-chore">' +
+            '<b>' + escapeHtml(row.name) + '</b>' +
+            '<span>' + row.total + '回 / ' + row.points + 'pt</span>' +
+          '</div>' +
+          '<div class="home-trend-num" style="color:' + CONFIG.USERS.a.color + '">' + row.a + '</div>' +
+          '<div class="home-trend-num" style="color:' + CONFIG.USERS.b.color + '">' + row.b + '</div>' +
+          '<div class="home-trend-num home-trend-num-both">' + row.both + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  function buildChoreTrendTableRows(logs) {
+    var byChore = {};
+    logs.forEach(function (log) {
+      var chore = state.choresById[log.chore_id];
+      var id = log.chore_id || 'unknown';
+      if (!byChore[id]) {
+        byChore[id] = {
+          name: chore ? chore.name : '(削除済みの家事)',
+          a: 0,
+          b: 0,
+          both: 0,
+          points: 0
+        };
+      }
+      var row = byChore[id];
+      if (log.done_by === 'a') row.a++;
+      else if (log.done_by === 'b') row.b++;
+      else row.both++;
+      row.points += pointsForLog(log);
+    });
+
+    return Object.keys(byChore).map(function (id) {
+      var row = byChore[id];
+      row.total = row.a + row.b + row.both;
+      return row;
+    }).sort(function (a, b) {
+      return b.total - a.total || b.points - a.points || a.name.localeCompare(b.name);
     });
   }
 

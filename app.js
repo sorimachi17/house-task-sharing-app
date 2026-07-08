@@ -733,7 +733,7 @@
     var totalPts = weekPts.a + weekPts.b;
     var aPct = totalPts ? Math.round((weekPts.a / totalPts) * 100) : 0;
     var bPct = totalPts ? 100 - aPct : 0;
-    var aDeg = 0;
+    var aDeg = totalPts ? Math.round((weekPts.a / totalPts) * 360) : 180;
     var leaderText = totalPts === 0
       ? '今週はまだ記録なし'
       : (weekPts.a === weekPts.b ? 'ちょうど半分ずつ' : (weekPts.a > weekPts.b ? state.userNames.a : state.userNames.b) + 'が多め');
@@ -800,9 +800,9 @@
 
   function homePieRowHtml(name, points, pct, color) {
     return '<div class="home-pie-row">' +
-      '<span class="home-pie-name">' + escapeHtml(name) + '</span>' +
-      '<span class="home-pie-bar"><span style="width:' + pct + '%;background:' + color + '"></span></span>' +
-      '<span class="home-pie-muted"><b>' + points + 'pt</b><small>' + pct + '%</small></span>' +
+      '<span class="home-pie-dot" style="background:' + color + '"></span>' +
+      '<span>' + escapeHtml(name) + '</span>' +
+      '<span class="home-pie-muted">' + points + 'pt / ' + pct + '%</span>' +
     '</div>';
   }
 
@@ -957,7 +957,8 @@
       byKey[key].count++;
     });
     return Object.keys(byKey).map(function (key) { return byKey[key]; })
-      .sort(function (a, b) { return b.points - a.points || b.count - a.count; });
+      .sort(function (a, b) { return b.points - a.points || b.count - a.count; })
+      .slice(0, 10);
   }
 
   function territorySpanForPoints(points) {
